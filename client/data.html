@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>牌谱分析 · 数据</title>
+<script src="vendor/chart.umd.min.js"></script>
+<link rel="stylesheet" href="data.css">
+</head>
+<body>
+<nav class="topnav">
+  <b>my-h2n</b>
+  <a href="index.html">上传</a>
+  <a class="on" href="data.html">数据</a>
+  <a href="review.html">复盘</a>
+  <span class="navhint" id="navHint"></span>
+</nav>
+
+<div id="loading" class="loading">正在聚合统计…</div>
+<div id="page" hidden>
+
+<header><h1>♠ 牌谱分析 ♥</h1><div class="sub" id="hdSub"></div></header>
+<section class="grid kpis" id="kpis"></section>
+
+<h2>级别对比</h2><div class="table-scroll"><table>
+<tr><th>级别</th><th>手数</th><th>盈亏 ₮</th><th>盈亏 bb</th><th>bb/100</th><th>VPIP</th><th>PFR</th><th>3-Bet</th><th>WTSD</th><th>W$SD</th></tr><tbody id="stkRows"></tbody></table></div>
+<div class="note">各级别 bb/100 按各自大盲归一化，可直接比较。</div>
+
+<h2>盈亏走势</h2><div class="grid panels2">
+<div class="card"><div class="chart-wrap tall"><canvas id="cumChart"></canvas></div><div class="note">红线=非摊牌收益，蓝线=摊牌收益，绿线=总利润（₮）。</div></div>
+<div class="card"><div class="chart-wrap tall"><canvas id="cumBBChart"></canvas></div><div class="note">分级别累计 bb。</div></div></div>
+<div class="grid panels2" style="margin-top:14px">
+<div class="card"><div class="chart-wrap"><canvas id="dailyChart"></canvas></div><div class="note">每日盈亏（₮），按级别堆叠。</div></div>
+<div class="card"><div class="chart-wrap"><canvas id="hourChart"></canvas></div><div class="note">按小时盈亏与手数。</div></div></div>
+
+<h2>位置分析</h2><div class="grid panels2">
+<div class="card"><div class="chart-wrap tall"><canvas id="posChart"></canvas></div><div class="note">各位置 bb/100。</div></div>
+<div class="card"><div class="chart-wrap tall"><canvas id="posVpipChart"></canvas></div><div class="note">各位置 VPIP / PFR。</div></div></div>
+<div class="table-scroll" style="margin-top:14px"><table>
+<tr><th>位置</th><th>手数</th><th>VPIP</th><th>PFR</th><th>3-Bet</th><th>WTSD</th><th>W$SD</th><th>bb/100</th><th>盈亏 ₮</th><th>备注</th></tr><tbody id="posRows"></tbody></table></div>
+
+<h2>翻前打法</h2><div class="pills" id="pfPills"></div>
+<h2>翻后打法</h2><div class="pills" id="poPills"></div>
+
+<h2>起手牌表现（13×13 热图）</h2><div class="grid panels2">
+<div class="card"><div id="heatmap"></div><div class="note">颜色=bb/100（绿赢红亏，±150封顶）；灰点为样本&lt;15手。<b>点击任意牌型</b>弹出该牌型全部手牌明细（手牌/级别/位置/公共牌/对手牌/时间/净赢，摊牌局才显示对手牌），表头可排序。</div></div>
+<div><div class="card" style="margin-bottom:14px"><b>最赚钱牌型 Top 8</b><div id="topWin"></div></div>
+<div class="card"><b>最亏钱牌型 Top 8</b><div id="topLose"></div><div class="note">弱牌（小同花连张/弱A/弱K杂色）手数偏多时可立即收紧。</div></div></div></div>
+
+<h2 id="sessTitle">场次明细</h2><div class="table-scroll"><table>
+<tr><th>日期</th><th>时段</th><th>手数</th><th>时长</th><th>手/时</th><th>盈亏 ₮</th><th>盈亏 bb</th></tr><tbody id="sessRows"></tbody></table></div>
+
+<h2>最大底池 Top 8</h2><div class="grid panels2">
+<div class="card"><b>赢下的最大底池</b><table><tr><th>手牌</th><th>级别</th><th>位置</th><th>公共牌</th><th>时间</th><th>净赢</th></tr><tbody id="potWin"></tbody></table></div>
+<div class="card"><b>输掉的最大底池</b><table><tr><th>手牌</th><th>级别</th><th>位置</th><th>公共牌</th><th>时间</th><th>净输</th></tr><tbody id="potLose"></tbody></table></div></div>
+
+<h2>数据与方法说明</h2><div class="card"><ul class="clean" id="methodList"></ul></div>
+<footer id="foot"></footer>
+</div>
+
+<div id="mask" class="mask">
+ <div class="modal">
+  <div class="mhead"><b id="mTitle"></b><span class="dim" id="mSub"></span><button class="mclose" id="mClose" title="关闭 (Esc)">×</button></div>
+  <div class="mbody"><table><thead><tr>
+   <th>手牌</th><th>级别</th><th>位置</th><th>公共牌</th><th>对手牌</th>
+   <th class="sortable" data-c="5">时间 <span class="arr"></span></th>
+   <th class="sortable" data-c="6">净赢 <span class="arr"></span></th>
+  </tr></thead><tbody id="mBody"></tbody></table></div>
+ </div>
+</div>
+
+<script src="data.js"></script>
+</body>
+</html>

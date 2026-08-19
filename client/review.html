@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh-CN"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>牌局浏览器</title>
+<link rel="stylesheet" href="review.css">
+</head><body>
+<nav class="topnav">
+  <b>my-h2n</b>
+  <a href="index.html">上传</a>
+  <a href="data.html">数据</a>
+  <a class="on" href="review.html">复盘</a>
+</nav>
+<section id="filters">
+  <details open><summary>基础</summary>
+    <div class="frow"><span class="lbl">级别</span><span id="g_lv"></span></div>
+    <div class="frow"><span class="lbl">位置</span><span id="g_pos"></span></div>
+    <div class="frow"><span class="lbl">日期</span><input type="date" id="d1"><span>~</span><input type="date" id="d2">
+      <span class="lbl" style="margin-left:14px;min-width:auto">小时</span>
+      <select id="h1"></select><span>~</span><select id="h2"></select>
+      <span class="hint">小时可跨天，如 21 ~ 6</span></div>
+  </details>
+  <details open><summary>翻前</summary>
+    <div class="frow">
+      <span class="lbl">Hero动作</span>
+      <select id="paSel"><option value="any">不限</option><option value="F">弃牌</option><option value="C">跟注</option><option value="R">加注</option><option value="X">过牌/walk</option></select>
+      <span class="lbl" style="min-width:auto">加注类型</span>
+      <select id="rtSel"><option value="any">不限</option><option value="open">平开 (open)</option><option value="3b">3bet</option><option value="4b">4bet+</option></select>
+      <span class="lbl" style="min-width:auto">之前局面</span>
+      <select id="fcSel"><option value="any">不限</option><option value="open">有人加过注 (面open)</option><option value="un">前面全弃 (未开池)</option></select>
+      <span class="lbl" style="min-width:auto">被3bet</span>
+      <select id="f3Sel"><option value="any">不限</option><option value="1">是</option><option value="0">否</option></select>
+      <span class="lbl" style="min-width:auto">Hero参与</span>
+      <select id="joinSel"><option value="any">不限</option><option value="yes">参与（翻前未弃牌）</option><option value="no">未参与（翻前弃牌）</option></select>
+    </div>
+  </details>
+  <details open><summary>手牌</summary>
+    <div class="frow"><span class="lbl">牌型/具体牌</span>
+      <input type="text" id="cardTxt" placeholder="如 AKs、QQ、98s、AhKd，多个用逗号分隔">
+      <span class="lbl" style="min-width:auto">分组</span>
+      <select id="grpSel">
+        <option value="any">任意</option><option value="pair">口袋对</option>
+        <option value="brdy">Broadway (T~A)</option><option value="bs">同花 Broadway</option>
+        <option value="bo">非同花 Broadway</option><option value="conn">同花连牌</option>
+        <option value="gap1">同花隔一张</option><option value="axs">Ax 同花</option>
+      </select>
+    </div>
+  </details>
+  <details open><summary>过程</summary>
+    <div class="frow">
+      <span class="lbl">到达街道</span>
+      <select id="stSel"><option value="any">不限</option><option value="0">翻前结束</option><option value="1">翻牌</option><option value="2">转牌</option><option value="3">河牌</option></select>
+      <span class="lbl" style="min-width:auto">有摊牌</span>
+      <select id="sdSel"><option value="any">不限</option><option value="1">是</option><option value="0">否</option></select>
+      <span class="lbl" style="min-width:auto">摊牌结果</span>
+      <select id="sdwSel"><option value="any">不限</option><option value="1">摊牌赢</option><option value="0">摊牌输</option><option value="2">摊牌平</option></select>
+      <span class="lbl" style="min-width:auto">Hero全下</span>
+      <select id="aiSel"><option value="any">不限</option><option value="1">是</option><option value="0">否</option></select>
+      <span class="lbl" style="min-width:auto">进翻人数</span>
+      <select id="nfSel"><option value="any">不限</option><option value="2">单挑 (2)</option><option value="3">3人</option><option value="4">4人+</option></select>
+    </div>
+  </details>
+  <details open><summary>结果</summary>
+    <div class="frow">
+      <span class="lbl">盈亏</span>
+      <select id="resSel"><option value="any">不限</option><option value="win">只看赢</option><option value="lose">只看输</option></select>
+      <span class="lbl" style="min-width:auto">净赢 bb</span>
+      <input type="number" id="bbMin" step="1" placeholder="最小"> ~ <input type="number" id="bbMax" step="1" placeholder="最大">
+      <span class="lbl" style="min-width:auto">底池 bb</span>
+      <input type="number" id="potMin" step="1" placeholder="最小"> ~ <input type="number" id="potMax" step="1" placeholder="最大">
+      <span class="hint">如：输掉 ≥10bb 的大底池 → 只看输 + 净赢最大 -10</span>
+    </div>
+  </details>
+  <details><summary>对手摊牌牌</summary>
+    <div class="frow"><span class="lbl">对手牌</span>
+      <input type="text" id="oppTxt" placeholder="如 55、AhKh、Qs9s（匹配摊牌亮出的牌）">
+      <span class="hint">仅进入摊牌的手牌有对手牌</span>
+    </div>
+  </details>
+  <div class="frow"><button class="btn" id="resetBtn">重置全部筛选</button><span class="hint">点击表格行可展开该手完整过程</span></div>
+</section>
+
+<div id="sumbar"></div>
+<div id="tblwrap">
+<table id="tbl">
+<thead><tr>
+  <th class="srt" data-k="t">时间</th><th>级别</th><th>位置</th><th>手牌</th>
+  <th>翻前</th><th>街道</th><th>进翻</th>
+  <th class="srt" data-k="potbb">底池(bb)</th>
+  <th class="srt" data-k="net">净赢(₮)</th>
+  <th class="srt" data-k="bb">净赢(bb)</th><th>结果</th>
+</tr></thead>
+<tbody id="tbody"></tbody>
+</table>
+</div>
+<div id="pager">
+  <button id="pgPrev">‹ 上一页</button><button id="pgNext">下一页 ›</button>
+  <span>每页</span><select id="perSel"><option>50</option><option selected>100</option><option>200</option></select>
+  <span id="pgInfo"></span>
+</div>
+
+<script src="review.js"></script>
+</body></html>

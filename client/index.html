@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>上传牌谱 · my-h2n</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<nav>
+  <h1>my-h2n</h1>
+  <a class="tab on" href="index.html">上传</a>
+  <a class="tab" href="data.html">数据</a>
+  <a class="tab" href="review.html">复盘</a>
+</nav>
+
+<div id="drop" class="card">
+  <div class="big">把牌谱 <b>.txt</b> 拖到这里</div>
+  <div class="dim small" style="margin-bottom:12px">可多选；同一文件重复上传会跳过，重叠时段的牌谱按手牌编号自动去重</div>
+  <input type="file" id="picker" accept=".txt,text/plain" multiple hidden>
+  <button id="pick">选择文件</button>
+</div>
+
+<div class="queue" id="queue"></div>
+
+<h2>库存概览</h2>
+<div class="pills" id="totals"></div>
+
+<h2>上传历史</h2>
+<div class="table-scroll">
+  <table>
+    <thead><tr>
+      <th>文件</th><th>上传时间</th><th>大小</th><th>解析手数</th><th>新增</th><th>重复</th><th>守恒校验</th>
+    </tr></thead>
+    <tbody id="files"><tr><td colspan="7" class="empty">加载中…</td></tr></tbody>
+  </table>
+</div>
+
+<h2>最近入库 <span class="dim small">（抽查 10 手，确认数据可查）</span></h2>
+<div class="table-scroll">
+  <table>
+    <thead><tr>
+      <th>时间</th><th>级别</th><th>位置</th><th>手牌</th><th>翻前</th><th>底池(bb)</th><th>净赢(₮)</th><th>净赢(bb)</th>
+    </tr></thead>
+    <tbody id="recent"><tr><td colspan="8" class="empty">加载中…</td></tr></tbody>
+  </table>
+</div>
+
+<script src="upload.js"></script>
+</body>
+</html>

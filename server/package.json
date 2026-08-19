@@ -1,0 +1,15 @@
+{
+  "name": "my-h2n-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "牌谱入库 + 查询服务端（零外部依赖，node:sqlite + node:http）",
+  "engines": {
+    "node": ">=22.5"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "verify": "node scripts/verify.js",
+    "reset": "node scripts/reset.js"
+  }
+}
