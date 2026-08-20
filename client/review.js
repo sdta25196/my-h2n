@@ -53,6 +53,7 @@ function params() {
   if (ps.length) q.set('pos', ps.join(','));
   put('from', $('d1').value);
   put('to', $('d2').value);
+  put('hid', $('hidTxt').value.trim());
   if ($('h1').value !== '0' || $('h2').value !== '23') {
     q.set('h1', $('h1').value);
     q.set('h2', $('h2').value);
@@ -228,7 +229,7 @@ $('perSel').onchange = () => {
 };
 $('resetBtn').onclick = () => {
   ['g_lv', 'g_pos'].forEach((id) => $(id).querySelectorAll('.chip.on').forEach((b) => b.classList.remove('on')));
-  ['d1', 'd2', 'cardTxt', 'oppTxt', 'bbMin', 'bbMax', 'potMin', 'potMax'].forEach((id) => ($(id).value = ''));
+  ['d1', 'd2', 'hidTxt', 'cardTxt', 'oppTxt', 'bbMin', 'bbMax', 'potMin', 'potMax'].forEach((id) => ($(id).value = ''));
   $('h1').value = '0';
   $('h2').value = '23';
   ['paSel', 'rtSel', 'fcSel', 'f3Sel', 'joinSel', 'grpSel', 'stSel', 'sdSel', 'sdwSel', 'aiSel', 'nfSel', 'resSel'].forEach(
@@ -249,6 +250,10 @@ document.querySelectorAll('#filters select,#filters input').forEach((el) => {
   }
   $('h2').value = '23';
   mkChips($('g_pos'), POS);
+
+  // 从 URL 预填手牌编号筛选（数据页热图明细点击编号跳转过来）
+  const hid0 = new URLSearchParams(location.search).get('hid');
+  if (hid0) $('hidTxt').value = hid0;
 
   const t = await fetch('/api/totals').then((r) => r.json());
   libTotal = t.hands;

@@ -36,7 +36,7 @@ client/review.html+review.js   复盘页（浅色，1:1 复刻 hand_browser.py�
 client/vendor/chart.umd.min.js Chart.js 4.4.1
 ```
 
-死文件（留着没用，可删）：`client/src/index.js`（空）、`client/README.md`（一行标题）。
+死文件（留着没用，可删）：`client/src/index.js`（空）。前端细节见 `client/README.md`。
 
 ## 数据流
 
@@ -73,13 +73,15 @@ client/vendor/chart.umd.min.js Chart.js 4.4.1
 | `GET /api/files` | 上传历史 + 库存 |
 | `GET /api/totals` | 手数/净盈亏/时间范围/分级别明细 |
 | `GET /api/hands` | 20+ 筛选参数 + `page/per/sort/dir`，返回 `{page,per,total,pages,summary,rows}` |
-| `GET /api/report?minHands=100` | `build_stats()` 全量聚合，约 0.4s |
+| `GET /api/report?minHands=100&from=&to=&stakes=` | `build_stats()` 聚合，全量约 0.4s；筛选参数下推到 SQL |
 
-`/api/hands` 参数（全部走 SQL，见 `hands.js` 的 `buildWhere`）：`stakes` `pos`（逗号分隔）、`from` `to`、`h1` `h2`（小时可跨天如 21~6）、`pa` `rt` `fc` `f3` `join`、`cards`（2/3/4 字符 token，逗号分隔）、`grp`（`pair|brdy|bs|bo|conn|gap1|axs`）、`st` `sd` `sdw` `ai` `nf`、`res` `bbMin` `bbMax` `potMin` `potMax`、`opp`、`fileId`。`sort` 只接受 `t|potbb|net|bb`（白名单，别改成拼接列名）；`per` 上限 500。
+`/api/hands` 参数（全部走 SQL，见 `hands.js` 的 `buildWhere`）：`stakes` `pos`（逗号分隔）、`hid`（`hand_id` 精确匹配，逗号分隔，容忍 `#` 前缀）、`from` `to`、`h1` `h2`（小时可跨天如 21~6）、`pa` `rt` `fc` `f3` `join`、`cards`（2/3/4 字符 token，逗号分隔）、`grp`（`pair|brdy|bs|bo|conn|gap1|axs`）、`st` `sd` `sdw` `ai` `nf`、`res` `bbMin` `bbMax` `potMin` `potMax`、`opp`、`fileId`。`sort` 只接受 `t|potbb|net|bb`（白名单，别改成拼接列名）；`per` 上限 500。
 
 行字段是缩写（`id t ts lv bl pos cd hg pa rba rn f3 st sd sdw ai nf pot potbb net bb inv col rk sp fl tu ri opp act`），前端直接按这套用。
 
 `/api/report` 顶层：`meta / overview / overall / by_stakes / by_pos / by_day / by_hour / groups / top_wins / top_losses / sessions / cumulative / stakes`；空库返回 `{empty:true}`。`meta.player` 从牌谱文件名按 `_` 取第 2 段（沿用 Python 取法）。
+
+`/api/report` 的筛选参数：`from` `to`（`YYYY-MM-DD`，按 `ts_text` 整天闭区间，口径和 `hands.js` 一致）、`stakes`（逗号分隔），都在 `loadHands()` 里下推到 SQL WHERE，不是聚合完再过滤。**`minHands` 的默认值是动态的**（在 `index.js` 的路由里算）：无筛选 `100`，带了任一筛选就 `0` —— 否则一选窄时间段所有级别都掉到 100 手以下，整份报表被剔空。显式传 `minHands` 仍然优先。筛选条件回显在 `meta.filters`，`{empty:true}` 响应里也带，前端靠它区分「库是空的」和「筛没了」。
 
 ## 库表
 
@@ -107,5 +109,6 @@ client/vendor/chart.umd.min.js Chart.js 4.4.1
 - **Windows / MSYS bash**：`node -e` 里写 `/tmp/x.json` 会被翻译成 `D:\tmp\x.json` 导致 ENOENT。临时产物写到 `server/data/`（项目内且已 gitignore）。
 - **清库走 SQL 不删文件**（`reset.js` 用 DELETE + VACUUM），因为 Windows 上服务端占着 db 文件删不掉；这样服务端也不用停。
 - 改完服务端记得**重启进程**，否则 API 还是旧的。端口占用查 `netstat -ano | grep ":3000"`，杀进程 `taskkill //PID <pid> //F`。
-- 数据页 6 张图的 canvas id：`cumChart cumBBChart dailyChart hourChart posChart posVpipChart`；热图键的推法是 `i===j ? r1+r2 : i<j ? r1+r2+'s' : r2+r1+'o'`，手数 <15 画灰点，配色 ±150 截断。
+- 数据页 4 张图的 canvas id：`cumChart dailyChart posChart posVpipChart`（`cumBBChart` / `hourChart` 已按要求删掉，但服务端仍返回 `cumulative.bb` 和 `by_hour`）；热图键的推法是 `i===j ? r1+r2 : i<j ? r1+r2+'s' : r2+r1+'o'`，手数 <15 画灰点，配色 ±150 截断。
+- 数据页带筛选后**整页会重渲染**：图表必须先 `destroy()`（都记在 `charts[]`，用 `mkChart()` 创建），热图点击必须委托到 `#heatmap`（表格每次重建），热图弹窗缓存必须 `cache.clear()`，弹窗请求必须带上当前的 `from`/`to`/`stakes` 才能跟格子数字对上。
 - 复盘页没有 header（已按要求删掉），库存概要在 `#sumbar` 汇总条里。

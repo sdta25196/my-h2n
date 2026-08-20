@@ -123,6 +123,7 @@ POST /api/upload (请求体 = txt 原文)
 | 分类 | 参数 | 说明 |
 |---|---|---|
 | 级别位置 | `stakes` `pos` | 逗号分隔多选；`pos` 传 `POS_ORDER` 下标 |
+| 手牌编号 | `hid` | 逗号分隔多个 `hand_id` 精确匹配，容忍 `#123456` 前缀 |
 | 时间 | `from` `to` | `YYYY-MM-DD`，比较 `ts_text`，含首尾整天 |
 | 小时 | `h1` `h2` | 可跨天，如 `21`~`6`；`0`~`23` 视为不筛选 |
 | 翻前 | `pa` | `F/C/R/X`，Hero 翻前首动作 |
@@ -160,17 +161,27 @@ pot potbb net bb inv col rk sp fl tu ri opp act
 
 `t` 是分钟戳，`ts` 是 `'YYYY-MM-DD HH:MM:SS'` 文本；金额字段在出口除 100 转元，`potbb` 保留 1 位、`bb` 保留 2 位。
 
-### `GET /api/report?minHands=100`
+### `GET /api/report?minHands=100&from=&to=&stakes=`
 
 `poker_report.py` 的 `build_stats()` 移植版，**每次请求实时全量聚合**（约 0.4s / 29,658 手），不落中间表，所以新上传立刻反映到数据页。
 
-`minHands`（默认 100）会把手数不足的级别整体剔除，被剔的记在 `meta.dropped`。
+筛选参数（数据页的时间 / 级别筛选条用）：
+
+| 参数 | 说明 |
+|---|---|
+| `from` `to` | `YYYY-MM-DD`，比较 `ts_text` 含首尾整天，口径与 `/api/hands` 完全一致 |
+| `stakes` | 逗号分隔多选，`stakes IN (...)` |
+| `minHands` | 手数不足的级别整体剔除，被剔的记在 `meta.dropped` |
+
+**`minHands` 的默认值是动态的**（见 `index.js` 的路由）：无筛选时 `100`（保持全量视图的原有行为），一旦带了 `from`/`to`/`stakes` 就默认 `0`。否则用户筛到一个窄区间时，每个级别都可能不足 100 手而被全部剔掉，接口返回 `{empty:true}`，页面看起来像坏了。显式传 `minHands` 始终优先。
+
+筛选条件会回显在 `meta.filters`（`{from,to,stakes}`），`empty` 响应里也带，前端靠它区分「库是空的」和「筛没了」两种提示文案。
 
 顶层结构：
 
 | 键 | 内容 |
 |---|---|
-| `meta` | `player`（牌谱文件名按 `_` 取第 2 段，沿用 Python 取法）、`sources`、日期范围、`generated`、`min_hands`、`dropped` |
+| `meta` | `player`（牌谱文件名按 `_` 取第 2 段，沿用 Python 取法）、`sources`、日期范围、`generated`、`min_hands`、`dropped`、`filters` |
 | `overview` | 手数 / 净盈亏 / 总 bb / bb100 / `rake_est` / 场次数 / 时长 / 每小时手数 |
 | `overall` | 全量指标（`fin()` 输出：VPIP、PFR、3bet、4bet、fold3bet、限进、walk、bbdef、steal、WTSD、W$SD、WWSF、check-raise、三条街 cbet / fold-to-cbet / AFq，都带分母 `*_opp`） |
 | `by_stakes` `by_pos` | 同上结构，按级别 / 按 `POS_ORDER` 六个位置 |

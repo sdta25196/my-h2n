@@ -134,8 +134,17 @@ const server = createServer((req, res) => {
     if (req.method === 'GET' && p === '/api/files') return sendJson(res, 200, { files: listFiles(db), totals: totals(db) });
     if (req.method === 'GET' && p === '/api/totals') return sendJson(res, 200, totals(db));
     if (req.method === 'GET' && p === '/api/hands') return sendJson(res, 200, queryHands(db, url.searchParams));
-    if (req.method === 'GET' && p === '/api/report')
-      return sendJson(res, 200, buildReport(db, { minHands: Number(url.searchParams.get('minHands') ?? 100) }));
+    if (req.method === 'GET' && p === '/api/report') {
+      const sp = url.searchParams;
+      const from = sp.get('from') || '';
+      const to = sp.get('to') || '';
+      const stakes = (sp.get('stakes') || '').split(',').map((s) => s.trim()).filter(Boolean);
+      // 有筛选时默认不再按手数剔除级别：用户明确要看的区间不该被悄悄丢掉
+      // （显式传 minHands 仍然优先，全量视图保持 100 手门槛不变）
+      const mh = sp.get('minHands');
+      const minHands = mh !== null && mh !== '' ? Number(mh) : from || to || stakes.length ? 0 : 100;
+      return sendJson(res, 200, buildReport(db, { minHands, from, to, stakes }));
+    }
     if (p.startsWith('/api/')) return sendJson(res, 404, { error: '未知接口 ' + p });
     if (req.method === 'GET') return serveStatic(res, p);
     sendJson(res, 405, { error: '不支持的方法 ' + req.method });

@@ -57,9 +57,22 @@ src/index.js  0 B   空文件，死文件，可删
 
 ## 数据页 `data.html` + `data.js`
 
-一次 `GET /api/report?minHands=100` 拿全部聚合结果存进全局 `S`，然后分四步渲染：`renderHead()` → `renderTables()` → `renderHeatmap()` → `renderCharts()`，最后 `wireModal()` 挂交互。
+`init()` 先拉 `/api/totals` 存进 `LIB`（用来生成级别 chip 和「全部」预设的日期边界），再 `reload()` 打 `/api/report` 把聚合结果存进全局 `S`，然后分四步渲染：`renderHead()` → `renderTables()` → `renderHeatmap()` → `renderCharts()`。
 
 加载中显示 `#loading`，成功后 `hidden` 切换到 `#page`；`S.empty` 时提示去上传页（若有 `S.dropped` 会一并说明哪些级别因样本不足被剔除）。
+
+### 时间 / 级别筛选条
+
+`#dfilters` 里两行：日期范围 `#fFrom` `#fTo` + 四个快捷预设（最近 7 天 / 最近 30 天 / 本月 / 全部），级别是按 `LIB.by_stakes` 动态生成的多选 chip。状态存在 `F = { from, to, stakes }`，改动即 `reload()`（**不防抖**，因为 report 是重聚合，靠 `seq` 序号丢弃过期响应 + `#dfilters.busy` 禁交互来兜住连点）。
+
+几个不能踩的点：
+
+- **`minHands` 不再硬编码**。`reportUrl()` 只在「无任何筛选」时带 `minHands=100`；一旦带了 `from`/`to`/`stakes` 就不带，服务端会默认成 `0`（不剔除）。否则一选窄时间段，所有级别都掉到 100 手以下，页面直接空成一片，看着像坏了。
+- **每次 `reload()` 必须 `cache.clear()`**。热图弹窗的明细缓存是按牌型键的，不含筛选条件；不清就会拿上一组筛选的明细。
+- **`renderCharts()` 开头要销毁旧实例**。4 张图记在 `charts[]` 里（`mkChart()` 包一层 `new Chart` 顺手 push），重渲染前逐个 `destroy()`，否则 Chart.js 报「canvas already in use」。
+- **热图点击用事件委托**，挂在稳定的 `#heatmap` 容器上而不是每次重建的 `#hmTable`，否则第二次渲染后格子就点不动了。
+- 预设按钮和日期框是**双向同步**的：`applyPreset()` 写日期，`markPreset()` 反过来在日期恰好等于某个预设区间时点亮对应按钮。「全部」的边界取 `LIB.last_ts` 而不是 `new Date()`，因为牌谱可能是历史数据。
+- 筛完没数据时（`S.empty` 且有筛选）文案是「当前筛选条件下没有手牌」并**保留筛选条可见**，让用户能改回来；服务端靠 `meta.filters` 回显筛选条件，前端用它区分「库是空的」和「筛没了」。
 
 ### 数字格式化（三套，别混用）
 
@@ -73,20 +86,20 @@ src/index.js  0 B   空文件，死文件，可删
 
 曾经因为 bb/100 误用了带千分位的版本，出现 `+1,237.9` vs 脚本的 `+1237.9`。另外 `signOf(r, v)` 会在舍入后为 0 但原值为负时仍输出 `-`，跟 Python 的行为一致。
 
-### 六张图
+### 四张图
 
 Chart.js 全局默认色在 `renderCharts()` 里统一改过（`Chart.defaults.color/borderColor/font.family`），零刻度线用 `GZ` 回调加深，调色板 `PAL` 8 色循环。canvas id：
 
 | id | 图 |
 |---|---|
 | `cumChart` | 累计盈亏（总利润 / 摊牌 / 非摊牌三条填充线） |
-| `cumBBChart` | 分级别累计 bb |
 | `dailyChart` | 每日盈亏，按级别堆叠柱 |
-| `hourChart` | 按小时盈亏（柱，正负分色）+ 手数（线，右轴 `y1`） |
 | `posChart` | 各位置 bb/100 |
 | `posVpipChart` | 各位置 VPIP / PFR 双柱 |
 
-`hourChart` 只画有手数的小时（`by_hour.filter(hands > 0)`）。所有图 `maintainAspectRatio: false`，高度由 `.chart-wrap` / `.tall` 的 CSS 控制。
+原本还有「分级别累计 bb」（`cumBBChart`）和「按小时盈亏与手数」（`hourChart`）两张，**已按要求删掉**。服务端 `/api/report` 仍然返回 `cumulative.bb` 和 `by_hour`，只是前端不再用 —— 想加回来的话数据是现成的。
+
+所有图 `maintainAspectRatio: false`，高度由 `.chart-wrap` / `.tall` 的 CSS 控制。
 
 ### 13×13 热图 + 明细弹窗
 
@@ -98,17 +111,28 @@ i === j ? r1 + r2 : i < j ? r1 + r2 + 's' : r2 + r1 + 'o'
 
 即**右上三角同花、左下三角杂色、对角线对子**。手数 `< 15` 画灰点 `·`，否则底色按 `bb100` 在 **±150 截断**后映射绿/红透明度。
 
-点格子调 `showGroup(key)`：`GET /api/hands?cards=<牌型>&per=500&sort=t&dir=asc&stakes=<报表保留的级别>`，结果拍平成 7 列数组存进 `cache`（同一牌型只拉一次）。弹窗内的排序是**前端本地排序**（`sortBy()` 对 `curRows` 原地 sort），不再打服务端。关闭：`×` 按钮 / 点遮罩 / `Esc`。
+点格子调 `showGroup(key)`：`GET /api/hands?cards=<牌型>&per=500&sort=t&dir=asc&stakes=<报表保留的级别>&from=&to=`，结果拍平成 8 列数组存进 `cache`（同一牌型只拉一次，末列是 `hand_id`）。弹窗内的排序是**前端本地排序**（`sortBy()` 对 `curRows` 原地 sort），不再打服务端。关闭：`×` 按钮 / 点遮罩 / `Esc`。
 
-`stakes` 必须带上 `S.stakes`，否则弹窗会把被 `minHands` 剔掉的级别也算进来，合计跟热图对不上。
+弹窗最后一列「编号」是 `hand_id`，点它在新标签打开 `review.html?hid=<编号>`，复盘页会自动预填手牌编号筛选。
+
+**弹窗合计必须和热图格子对得上**，所以三个参数都不能漏：`stakes` 带 `S.stakes`（报表实际保留的级别，否则被 `minHands` 剔掉的级别会混进来），`from` / `to` 带当前筛选的日期范围（否则筛了时间的热图格子点开会看到范围外的手牌）。改 `fetchGroup()` 时对着 `/api/report` 的 `groups` 复核一遍手数和净盈亏。
 
 支持 hash 深链：打开 `data.html#g=AKs` 会自动弹出该牌型明细。
+
+### 牌面渲染
+
+`ch()` / `chs()` 与复盘页 `review.js` 完全同一套写法（`♠♥♦♣` + 按花色着色），用在热图弹窗的手牌/公共牌/对手牌，以及「最大底池」两张表的手牌/公共牌。热图格子里的 `AKs` 是**牌型**不是具体牌，保持纯文本。
+
+配色不能照抄 `review.css`：复盘页是浅色主题，黑桃 `#252b36` 在数据页暗底上等于看不见，所以 `data.css` 里的 `.cd.*` 是调亮过的一套。
+
+对手牌用 `chsOpp()`：`opp` 字段是空格分隔的裸牌串，多个对手 `join(' ')` 后分组信息就丢了（3 家摊牌 = `'Kc 9d Ac Kh Tc Jh'`）。因为 parser 的 `RE_SHOWS` 每人固定抓 2 张，所以**按 2 张一组切**就能还原每个对手，组间用 `/` 分隔。别用 `split(' ')` 逐张切 —— 那会渲染成 `K♣ / 9♦ / A♣ / …`，看着像 6 个对手。
 
 ## 复盘页 `review.html` + `review.js`
 
 筛选 / 排序 / 分页**全部交给服务端 SQL**，前端只持有当前一页（`CUR`）。
 
-- **6 组筛选器**放在 `<details>` 折叠块里：基础（级别/位置/日期/小时）、翻前、手牌、过程、结果、对手摊牌牌。级别和位置是动态生成的多选 chip（级别取自 `/api/totals` 的 `by_stakes`，位置取 `POS`），其余是 `select` / `input`。
+- **6 组筛选器**放在 `<details>` 折叠块里：基础（级别/位置/日期/小时/手牌编号）、翻前、手牌、过程、结果、对手摊牌牌。级别和位置是动态生成的多选 chip（级别取自 `/api/totals` 的 `by_stakes`，位置取 `POS`），其余是 `select` / `input`。
+- **URL 预填**：初始化时读 `location.search` 的 `hid` 填进 `#hidTxt`，供数据页热图弹窗跳转过来用。这是这页唯一的 URL 状态，改筛选不回写 URL。
 - **参数拼装**在 `params()`：`put()` 会跳过空串和 `'any'`，所以「不限」不会进 query；小时只在非 `0~23` 时才带上。
 - **防抖 180ms**（`apply()`），避免输入框每个字符打一次请求。翻页和排序不防抖，直接 `load()`。
 - **慢响应淘汰**：`reqSeq` 自增，响应回来时 `seq !== reqSeq` 就丢弃 —— 快速改筛选时不会被先发后到的旧响应覆盖。
@@ -147,7 +171,7 @@ opp 对手摊牌牌（空格分隔）    act  四街动作日志，'|' 分街
 
 - 三个页面都是**字符串拼 `innerHTML`**，没有虚拟 DOM。改渲染时注意 `esc()` 和引号闭合。
 - `data.js` 的 `pyRound()` 和 `server/src/report.js` 的是**两份独立实现**，改一处要改两处，否则展示层数字和 API 数字会分叉。
-- `minHands=100` 在 `data.js` 里是**硬编码**的，没有 UI 可调。
-- Chart.js 是唯一第三方，已 vendor 到 `vendor/`。**不要改成 CDN**，也不要再引入别的库。
+- `minHands` 由 `reportUrl()` 决定带不带：无筛选带 `100`，有筛选不带（服务端默认 `0`）。没有单独调这个值的 UI。
+- Chart.js 是唯一第三方，已 vendor 到 `vendor/`。**不要改成 CDN**，也不要再引入别的库。数据页的图会被反复重建，新增图表记得走 `mkChart()` 而不是 `new Chart()`，否则重渲染时炸。
 - `src/index.js` 是 0 字节死文件，留着没用。
 - **没有在真实浏览器里验证过**图表绘制、热图点击弹窗、筛选器交互（只用 DOM/Chart/fetch 桩做过无头冒烟）。动这三块渲染的话，改完让用户开页面确认，别声称已测。

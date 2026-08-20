@@ -34,6 +34,19 @@ const f1 = (v) => (v === null || v === undefined ? '-' : v.toFixed(1));
 const cls = (v) => (v > 0 ? 'pos' : v < 0 ? 'neg' : '');
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
 
+// 花色渲染：与复盘页 review.js 的 ch()/chs() 完全一致（♠♥♦♣ + 按花色着色）
+const SU = { s: '♠', h: '♥', d: '♦', c: '♣' };
+const ch = (c) => (c ? '<span class="cd ' + c[1] + '">' + c[0] + SU[c[1]] + '</span>' : '');
+const chs = (s) => ((s || '').replace(/\s+/g, '').match(/../g) || []).map(ch).join(' ');
+// 对手摊牌牌：opp 是空格分隔的裸牌串，每个对手固定 2 张（parser 的 RE_SHOWS 只抓两张），
+// 所以按 2 张一组切开即可还原「每个对手」的分组，组间用 " / " 分隔
+const chsOpp = (s) => {
+  const cards = (s || '').replace(/\s+/g, '').match(/../g) || [];
+  const per = [];
+  for (let i = 0; i < cards.length; i += 2) per.push(cards.slice(i, i + 2).map(ch).join(' '));
+  return per.join('<span class="cdsep"> / </span>');
+};
+
 let S = null; // 整份 report
 
 function renderHead() {
@@ -88,8 +101,8 @@ function renderTables() {
     pots
       .map(
         (p) =>
-          `<tr><td class="mono">${esc(p.cards)}</td><td>${esc(p.stakes)}</td><td>${p.pos}</td>` +
-          `<td class="mono dim">${esc(p.board) || '—'}</td><td>${p.ts}</td>` +
+          `<tr><td>${chs(p.cards)}</td><td>${esc(p.stakes)}</td><td>${p.pos}</td>` +
+          `<td>${chs(p.board) || '<span class="dim">—</span>'}</td><td>${p.ts}</td>` +
           `<td class="${cls(p.net)}"><b>${money(p.net)}</b></td></tr>`
       )
       .join('');
@@ -181,21 +194,22 @@ function renderHeatmap() {
 }
 
 // ---------------- 图表 ----------------
+// 筛选会重画整页，Chart.js 不允许同一 canvas 上挂两个实例，所以统一登记 + 重画前销毁
+let charts = [];
+const mkChart = (el, cfg) => charts.push(new Chart(el, cfg));
+
 function renderCharts() {
+  charts.forEach((c) => c.destroy());
+  charts = [];
   const stakes = S.stakes;
-  const hourOn = S.by_hour.filter((e) => e.hands > 0);
   const D = {
     cum_x: S.cumulative.x,
     cum_all: S.cumulative.all,
     cum_sd: S.cumulative.sd,
     cum_nsd: S.cumulative.nsd,
-    cum_bb: S.cumulative.bb,
     stakes,
     labels_day: S.by_day.map((d) => d.date.slice(5)),
     daily: Object.fromEntries(stakes.map((k) => [k, S.by_day.map((d) => d.stk[k] || 0)])),
-    hour_labels: hourOn.map((e) => String(e.hour).padStart(2, '0')),
-    hour_net: hourOn.map((e) => e.net),
-    hour_hands: hourOn.map((e) => e.hands),
     pos_labels: POS_ORDER,
     pos_bb100: POS_ORDER.map((p) => S.by_pos[p].bb100),
     pos_vpip: POS_ORDER.map((p) => S.by_pos[p].vpip),
@@ -208,7 +222,7 @@ function renderCharts() {
   const PAL = ['#22c55e', '#f59e0b', '#38bdf8', '#a78bfa', '#ef4444', '#eab308', '#14b8a6', '#f472b6'];
   const GZ = (c) => (c.tick.value === 0 ? '#3b4d6e' : '#1b2740');
 
-  new Chart($('cumChart'), {
+  mkChart($('cumChart'), {
     type: 'line',
     data: {
       labels: D.cum_x,
@@ -226,28 +240,7 @@ function renderCharts() {
     },
   });
 
-  new Chart($('cumBBChart'), {
-    type: 'line',
-    data: {
-      labels: D.cum_x,
-      datasets: D.stakes.map((s, i) => ({
-        label: s + ' 累计 bb',
-        data: D.cum_bb[s] || [],
-        borderColor: PAL[i % 8],
-        pointRadius: 0,
-        borderWidth: 1.6,
-        tension: 0.15,
-      })),
-    },
-    options: {
-      maintainAspectRatio: false,
-      interaction: { mode: 'index', intersect: false },
-      plugins: { legend: { position: 'top' } },
-      scales: { x: { ticks: { maxTicksLimit: 9 } }, y: { grid: { color: GZ } } },
-    },
-  });
-
-  new Chart($('dailyChart'), {
+  mkChart($('dailyChart'), {
     type: 'bar',
     data: {
       labels: D.labels_day,
@@ -260,22 +253,7 @@ function renderCharts() {
     },
   });
 
-  new Chart($('hourChart'), {
-    data: {
-      labels: D.hour_labels,
-      datasets: [
-        { type: 'bar', label: '盈亏 ₮', data: D.hour_net, backgroundColor: D.hour_net.map((v) => (v >= 0 ? 'rgba(34,197,94,.75)' : 'rgba(239,68,68,.75)')), borderRadius: 3, yAxisID: 'y' },
-        { type: 'line', label: '手数', data: D.hour_hands, borderColor: '#a78bfa', pointRadius: 2, borderWidth: 1.5, yAxisID: 'y1' },
-      ],
-    },
-    options: {
-      maintainAspectRatio: false,
-      plugins: { legend: { position: 'top' } },
-      scales: { y: { position: 'left', grid: { color: GZ } }, y1: { position: 'right', grid: { display: false } } },
-    },
-  });
-
-  new Chart($('posChart'), {
+  mkChart($('posChart'), {
     type: 'bar',
     data: {
       labels: D.pos_labels,
@@ -284,7 +262,7 @@ function renderCharts() {
     options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { grid: { color: GZ } } } },
   });
 
-  new Chart($('posVpipChart'), {
+  mkChart($('posVpipChart'), {
     type: 'bar',
     data: {
       labels: D.pos_labels,
@@ -307,9 +285,10 @@ function renderRows() {
   $('mBody').innerHTML = curRows
     .map(
       (r) =>
-        `<tr><td class="mono">${esc(r[0])}</td><td>${esc(r[1])}</td><td>${r[2]}</td>` +
-        `<td class="mono dim">${esc(r[3]) || '—'}</td><td class="mono${r[4] ? ' opp' : ' dim'}">${esc(r[4]) || '—'}</td>` +
-        `<td>${r[5]}</td><td class="${cls(r[6])}">${money(r[6])}</td></tr>`
+        `<tr><td>${chs(r[0])}</td><td>${esc(r[1])}</td><td>${r[2]}</td>` +
+        `<td>${chs(r[3]) || '<span class="dim">—</span>'}</td><td>${chsOpp(r[4]) || '<span class="dim">—</span>'}</td>` +
+        `<td>${r[5]}</td><td class="${cls(r[6])}">${money(r[6])}</td>` +
+        `<td class="mono"><a class="hidlink" href="review.html?hid=${encodeURIComponent(r[7])}" target="_blank" rel="noopener" title="在复盘页打开该手牌">${esc(r[7])}</a></td></tr>`
     )
     .join('');
   document.querySelectorAll('th.sortable').forEach((th) => {
@@ -320,16 +299,20 @@ function renderRows() {
 async function fetchGroup(g) {
   if (cache.has(g)) return cache.get(g);
   const q = new URLSearchParams({ cards: g, per: '500', sort: 't', dir: 'asc', stakes: S.stakes.join(',') });
+  // 明细必须跟着页面筛选走，否则弹窗合计和热图格子对不上
+  if (F.from) q.set('from', F.from);
+  if (F.to) q.set('to', F.to);
   const res = await fetch('/api/hands?' + q);
   const data = await res.json();
   const rows = data.rows.map((r) => [
-    r.cd ? r.cd.slice(0, 2) + ' ' + r.cd.slice(2) : '',
+    r.cd || '',
     r.lv,
     r.pos >= 0 ? POS_ORDER[r.pos] : '?',
     [r.fl, r.tu, r.ri].filter(Boolean).join(' '),
-    (r.opp || '').split(' ').filter(Boolean).join(' / '),
+    r.opp || '',
     r.ts.slice(5, 16),
     r.net,
+    r.id,
   ]);
   cache.set(g, rows);
   return rows;
@@ -375,34 +358,168 @@ function wireModal() {
   document.querySelectorAll('th.sortable').forEach((th) => {
     th.onclick = () => sortBy(+th.dataset.c);
   });
-  $('hmTable').addEventListener('click', (e) => {
+  // 委托挂在稳定的 #heatmap 容器上：renderHeatmap() 每次筛选都会重建 #hmTable，
+  // 直接绑在 table 上的监听器会随旧节点一起丢掉
+  $('heatmap').addEventListener('click', (e) => {
     const td = e.target.closest('td[data-g]');
     if (td) showGroup(td.dataset.g);
   });
-  if (location.hash.indexOf('#g=') === 0) {
-    const g0 = decodeURIComponent(location.hash.slice(3));
-    if (S.groups[g0]) showGroup(g0);
-  }
 }
 
-(async function init() {
+// hash 深链 data.html#g=AKs：必须等首次聚合拿到 S 之后才能查 S.groups
+function openHashGroup() {
+  if (!S || location.hash.indexOf('#g=') !== 0) return;
+  const g0 = decodeURIComponent(location.hash.slice(3));
+  if (S.groups[g0]) showGroup(g0);
+}
+
+// ---------------- 时间 / 级别筛选 ----------------
+const F = { from: '', to: '', stakes: [] };
+let LIB = null;   // /api/totals，用来铺级别 chip 和算预设区间
+let seq = 0;      // 慢响应淘汰
+
+const pad2 = (n) => String(n).padStart(2, '0');
+const ymd = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+
+function readFilters() {
+  F.from = $('fFrom').value;
+  F.to = $('fTo').value;
+  F.stakes = [...$('fStakes').querySelectorAll('.fchip.on')].map((b) => b.dataset.v);
+}
+
+function reportUrl() {
+  const q = new URLSearchParams();
+  if (F.from) q.set('from', F.from);
+  if (F.to) q.set('to', F.to);
+  if (F.stakes.length) q.set('stakes', F.stakes.join(','));
+  // 无筛选时保留原来的 100 手门槛；有筛选时交给服务端自动放宽（见 index.js）
+  if (!q.toString()) q.set('minHands', '100');
+  return '/api/report?' + q;
+}
+
+function filterHint() {
+  const on = [];
+  if (F.from || F.to) on.push(`${F.from || '库首'} ~ ${F.to || '库尾'}`);
+  if (F.stakes.length) on.push(F.stakes.join(' + '));
+  $('fHint').textContent = on.length
+    ? `已筛选：${on.join(' ｜ ')}（不按 100 手门槛剔除级别）`
+    : `全部 ${nfmt(LIB.hands)} 手 ｜ 少于 100 手的级别不计入`;
+}
+
+async function reload() {
+  const my = ++seq;
+  readFilters();
+  filterHint();
+  cache.clear(); // 明细缓存跟着筛选失效
+  $('dfilters').classList.add('busy');
+  $('navHint').textContent = '聚合中…';
+  let data;
   try {
-    const res = await fetch('/api/report?minHands=100');
-    S = await res.json();
+    data = await (await fetch(reportUrl())).json();
   } catch (err) {
+    $('navHint').textContent = '';
+    $('dfilters').classList.remove('busy');
+    $('loading').hidden = false;
     $('loading').textContent = '加载 /api/report 失败：' + err.message;
     return;
   }
-  if (S.empty) {
-    const d = S.dropped && Object.keys(S.dropped).length ? `（样本不足被剔除：${JSON.stringify(S.dropped)}）` : '';
-    $('loading').innerHTML = `库里还没有足够的手牌${d}。请先到 <a href="index.html" style="color:#38bdf8">上传</a> 页导入牌谱。`;
+  if (my !== seq) return; // 已有更新的请求在路上
+  $('navHint').textContent = '';
+  $('dfilters').classList.remove('busy');
+
+  if (data.empty) {
+    const d = data.dropped && Object.keys(data.dropped).length
+      ? `（样本不足被剔除：${JSON.stringify(data.dropped)}）`
+      : '';
+    $('page').hidden = true;
+    $('loading').hidden = false;
+    $('loading').innerHTML = F.from || F.to || F.stakes.length
+      ? `当前筛选条件下没有手牌${d}。放宽时间范围或多选几个级别试试。`
+      : `库里还没有足够的手牌${d}。请先到 <a href="index.html" style="color:#38bdf8">上传</a> 页导入牌谱。`;
     return;
   }
+  S = data;
   $('loading').hidden = true;
   $('page').hidden = false;
   renderHead();
   renderTables();
   renderHeatmap();
   renderCharts();
+}
+
+function applyPreset(kind) {
+  const last = LIB.last_ts ? new Date(String(LIB.last_ts).replace(' ', 'T')) : new Date();
+  if (kind === 'all') {
+    $('fFrom').value = '';
+    $('fTo').value = '';
+  } else if (kind === 'month') {
+    $('fFrom').value = ymd(new Date(last.getFullYear(), last.getMonth(), 1));
+    $('fTo').value = ymd(last);
+  } else {
+    const n = Number(kind);
+    const from = new Date(last);
+    from.setDate(from.getDate() - (n - 1)); // 含当天，"最近7天" = 7 个自然日
+    $('fFrom').value = ymd(from);
+    $('fTo').value = ymd(last);
+  }
+  markPreset();
+  reload();
+}
+
+// 日期框和预设按钮双向对齐：手改日期后，若刚好等于某个预设区间就点亮它
+function markPreset() {
+  const f = $('fFrom').value;
+  const t = $('fTo').value;
+  const last = LIB.last_ts ? new Date(String(LIB.last_ts).replace(' ', 'T')) : new Date();
+  const hit = (kind) => {
+    if (kind === 'all') return !f && !t;
+    if (kind === 'month') return f === ymd(new Date(last.getFullYear(), last.getMonth(), 1)) && t === ymd(last);
+    const from = new Date(last);
+    from.setDate(from.getDate() - (Number(kind) - 1));
+    return f === ymd(from) && t === ymd(last);
+  };
+  $('fPresets').querySelectorAll('.pbtn').forEach((b) => b.classList.toggle('on', hit(b.dataset.d)));
+}
+
+function wireFilters() {
+  $('fStakes').innerHTML = '';
+  LIB.by_stakes.forEach((s) => {
+    const b = document.createElement('button');
+    b.className = 'fchip';
+    b.dataset.v = s.stakes;
+    b.textContent = `${s.stakes} (${nfmt(s.hands)})`;
+    b.onclick = () => {
+      b.classList.toggle('on');
+      reload();
+    };
+    $('fStakes').appendChild(b);
+  });
+  $('fPresets').querySelectorAll('.pbtn').forEach((b) => {
+    b.onclick = () => applyPreset(b.dataset.d);
+  });
+  ['fFrom', 'fTo'].forEach((id) => {
+    $(id).onchange = () => {
+      markPreset();
+      reload();
+    };
+  });
+  $('dfilters').hidden = false;
+}
+
+(async function init() {
+  try {
+    LIB = await (await fetch('/api/totals')).json();
+  } catch (err) {
+    $('loading').textContent = '加载 /api/totals 失败：' + err.message;
+    return;
+  }
+  if (!LIB.hands) {
+    $('loading').innerHTML = '库里还没有手牌。请先到 <a href="index.html" style="color:#38bdf8">上传</a> 页导入牌谱。';
+    return;
+  }
+  wireFilters();
+  markPreset();
   wireModal();
+  await reload();
+  openHashGroup();
 })();

@@ -22,10 +22,26 @@ const COLS = `ts_text, stakes, bb_cents, net_cents, pos, cards, hand_group, pa, 
   raises_pf_json, saw_flop, remaining, folded_to_hero, walk, folded_to_3bet,
   rake_share_cents, flop, turn, river, opp`;
 
-function loadHands(db) {
+// 时间/级别筛选：日期口径与 hands.js 的 from/to 一致（比较 ts_text，含首尾整天）
+function loadHands(db, { from = '', to = '', stakes = [] } = {}) {
+  const w = [];
+  const args = [];
+  if (from) {
+    w.push('ts_text >= ?');
+    args.push(from + ' 00:00:00');
+  }
+  if (to) {
+    w.push('ts_text <= ?');
+    args.push(to + ' 23:59:59');
+  }
+  if (stakes.length) {
+    w.push(`stakes IN (${stakes.map(() => '?').join(',')})`);
+    args.push(...stakes);
+  }
+  const where = w.length ? 'WHERE ' + w.join(' AND ') : '';
   return db
-    .prepare(`SELECT ${COLS} FROM hands ORDER BY ts_text, hand_id`)
-    .all()
+    .prepare(`SELECT ${COLS} FROM hands ${where} ORDER BY ts_text, hand_id`)
+    .all(...args)
     .map((r) => ({
       ts: new Date(String(r.ts_text).replace(' ', 'T')),
       tsText: String(r.ts_text),
@@ -216,9 +232,10 @@ function playerFrom(sources) {
   return 'Hero';
 }
 
-export function buildReport(db, { minHands = 100 } = {}) {
-  let hands = loadHands(db);
-  if (!hands.length) return { empty: true };
+export function buildReport(db, { minHands = 100, from = '', to = '', stakes = [] } = {}) {
+  const filters = { from, to, stakes };
+  let hands = loadHands(db, filters);
+  if (!hands.length) return { empty: true, filters };
   const sources = db.prepare('SELECT filename FROM upload_files ORDER BY id').all().map((r) => r.filename);
 
   const count = new Map();
@@ -226,7 +243,7 @@ export function buildReport(db, { minHands = 100 } = {}) {
   const dropped = {};
   for (const [k, c] of count) if (c < minHands) dropped[k] = c;
   hands = hands.filter((h) => !(h.stakes in dropped));
-  if (!hands.length) return { empty: true, dropped };
+  if (!hands.length) return { empty: true, dropped, filters };
 
   const total = hands.length;
   let totalNet = 0;
@@ -365,6 +382,7 @@ export function buildReport(db, { minHands = 100 } = {}) {
       })(),
       min_hands: minHands,
       dropped,
+      filters,
     },
     overview: {
       hands: total,

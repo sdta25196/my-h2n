@@ -52,6 +52,12 @@ function buildWhere(q) {
     w.push(`pos IN (${pos.map(() => '?').join(',')})`);
     args.push(...pos.map(Number));
   }
+  // 手牌编号：逗号分隔多个，容忍 "#123456" 写法
+  const hid = list('hid').map((s) => s.replace(/^#+/, ''));
+  if (hid.length) {
+    w.push(`hand_id IN (${hid.map(() => '?').join(',')})`);
+    args.push(...hid);
+  }
   if (q.get('from')) {
     w.push('ts_text >= ?');
     args.push(q.get('from') + ' 00:00:00');
