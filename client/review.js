@@ -60,12 +60,16 @@ function params() {
   }
   put('pa', $('paSel').value);
   put('rt', $('rtSel').value);
-  put('fc', $('fcSel').value);
+  put('agg', $('aggSel').value);
+  put('def', $('defSel').value);
   put('f3', $('f3Sel').value);
   put('join', $('joinSel').value);
   put('cards', $('cardTxt').value.trim());
   put('grp', $('grpSel').value);
   put('st', $('stSel').value);
+  put('hs', $('hsSel').value);
+  put('ha', $('haSel').value);
+  put('ip', $('ipSel').value);
   put('sd', $('sdSel').value);
   put('sdw', $('sdwSel').value);
   put('ai', $('aiSel').value);
@@ -232,7 +236,7 @@ $('resetBtn').onclick = () => {
   ['d1', 'd2', 'hidTxt', 'cardTxt', 'oppTxt', 'bbMin', 'bbMax', 'potMin', 'potMax'].forEach((id) => ($(id).value = ''));
   $('h1').value = '0';
   $('h2').value = '23';
-  ['paSel', 'rtSel', 'fcSel', 'f3Sel', 'joinSel', 'grpSel', 'stSel', 'sdSel', 'sdwSel', 'aiSel', 'nfSel', 'resSel'].forEach(
+  ['paSel', 'rtSel', 'aggSel', 'defSel', 'f3Sel', 'joinSel', 'grpSel', 'stSel', 'hsSel', 'haSel', 'ipSel', 'sdSel', 'sdwSel', 'aiSel', 'nfSel', 'resSel'].forEach(
     (id) => ($(id).value = 'any')
   );
   apply();

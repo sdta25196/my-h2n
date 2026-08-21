@@ -24,6 +24,31 @@ const GROUP_SQL = {
   axs: `NOT ${PAIR} AND ${SUITED} AND substr(hand_group, 1, 1) = 'A'`,
 };
 
+// 逐街 Hero 动作：seq_json 形如 {"flop":["check","call"],...}，按街存 Hero 的动作序列
+// 只看翻后三街（翻前用「翻前」分组里的 pa 口径），下标与 st 列同一套编码
+// 一条街上 check 只可能出现在首位，所以「是否先过牌」看前缀、动作归类看最后一个动作
+// 八个选项 =（先过牌 or 没先过牌）×（最后 check/bet/raise/call/fold），两两互斥且覆盖全部有动作的街
+const HA_STREETS = { 1: 'flop', 2: 'turn', 3: 'river' };
+const SEQ = (s) => `json_extract(seq_json, '$.${s}')`;
+const CK = (s) => `${SEQ(s)} LIKE '["check"%'`;
+const END = (s, kind) => `${SEQ(s)} LIKE '%"${kind}"]'`;
+const SEQ_SQL = {
+  ck: (s) => `${CK(s)} AND ${END(s, 'check')}`,
+  ckr: (s) => `${CK(s)} AND ${END(s, 'raise')}`,
+  ckc: (s) => `${CK(s)} AND ${END(s, 'call')}`,
+  ckf: (s) => `${CK(s)} AND ${END(s, 'fold')}`,
+  b: (s) => `NOT (${CK(s)}) AND ${END(s, 'bet')}`,
+  r: (s) => `NOT (${CK(s)}) AND ${END(s, 'raise')}`,
+  c: (s) => `NOT (${CK(s)}) AND ${END(s, 'call')}`,
+  f: (s) => `NOT (${CK(s)}) AND ${END(s, 'fold')}`,
+};
+
+// 翻后位置：只算单挑池（进翻 2 人且 Hero 进了翻牌），多人池一律排除
+// act 形如 "翻前段|翻牌段|转牌段|河牌段"，段内是 "H x P2 b0.75 …"；单挑池翻后先说话的就是 OOP
+// 取翻牌段头两个字符：'H ' = Hero 先说话（OOP），'P#' = 对手先说话（IP）
+const HU = 'nf = 2 AND saw_flop = 1';
+const FLOP_HEAD = "substr(act, instr(act, '|') + 1, 2)";
+
 function buildWhere(q) {
   const w = [];
   const args = [];
@@ -87,9 +112,16 @@ function buildWhere(q) {
     else if (rt === '3b') w.push('rn = 1');
     else if (rt === '4b') w.push('rn >= 2');
   }
-  const fc = q.get('fc');
-  if (fc === 'open') w.push('rba >= 1');
-  else if (fc === 'un') w.push('rba = 0');
+  // 翻前最后加注者口径：进攻方 = Hero 带着主动权进翻牌；防守方 = 对手加注、Hero 跟下来防守
+  // 无人加注的 limp 池 street_agg_json 里没有 preflop 键，两边都不算
+  const PFA = "json_extract(street_agg_json, '$.preflop')";
+  const DEF = `${PFA} IS NOT NULL AND ${PFA} <> 'Hero' AND pa <> 'F'`;
+  const agg = q.get('agg');
+  if (agg === '1') w.push(`${PFA} = 'Hero'`);
+  else if (agg === '0') w.push(`COALESCE(${PFA}, '') <> 'Hero'`);
+  const def = q.get('def');
+  if (def === '1') w.push(DEF);
+  else if (def === '0') w.push(`NOT (${DEF})`);
 
   const join = q.get('join');
   if (join === 'yes') w.push("pa <> 'F'");
@@ -97,6 +129,18 @@ function buildWhere(q) {
 
   eq('f3', 'faced_3bet');
   eq('st', 'st');
+  // 逐街 Hero 动作：hs 指定看哪一街（与「到达街道」st 无关），不给则翻后任一街命中即可
+  const ha = q.get('ha');
+  if (ha && ha !== 'any') {
+    if (!SEQ_SQL[ha]) throw new Error('未知的 Hero 街道动作: ' + ha);
+    const hs = num('hs');
+    if (hs !== null && !HA_STREETS[hs]) throw new Error('Hero 动作街道超出范围: ' + hs);
+    const streets = hs === null ? Object.values(HA_STREETS) : [HA_STREETS[hs]];
+    w.push(`(${streets.map((s) => `(${SEQ_SQL[ha](s)})`).join(' OR ')})`);
+  }
+  const ip = q.get('ip');
+  if (ip === 'ip') w.push(`${HU} AND ${FLOP_HEAD} LIKE 'P%'`);
+  else if (ip === 'oop') w.push(`${HU} AND ${FLOP_HEAD} = 'H '`);
   eq('sd', 'sd');
   eq('ai', 'ai');
   const sdw = q.get('sdw');

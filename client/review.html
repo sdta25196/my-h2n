@@ -28,12 +28,17 @@
       <select id="paSel"><option value="any">不限</option><option value="F">弃牌</option><option value="C">跟注</option><option value="R">加注</option><option value="X">过牌/walk</option></select>
       <span class="lbl" style="min-width:auto">加注类型</span>
       <select id="rtSel"><option value="any">不限</option><option value="open">平开 (open)</option><option value="3b">3bet</option><option value="4b">4bet+</option></select>
-      <span class="lbl" style="min-width:auto">之前局面</span>
-      <select id="fcSel"><option value="any">不限</option><option value="open">有人加过注 (面open)</option><option value="un">前面全弃 (未开池)</option></select>
       <span class="lbl" style="min-width:auto">被3bet</span>
       <select id="f3Sel"><option value="any">不限</option><option value="1">是</option><option value="0">否</option></select>
       <span class="lbl" style="min-width:auto">Hero参与</span>
       <select id="joinSel"><option value="any">不限</option><option value="yes">参与（翻前未弃牌）</option><option value="no">未参与（翻前弃牌）</option></select>
+    </div>
+    <div class="frow">
+      <span class="lbl">HERO进攻方</span>
+      <select id="aggSel"><option value="any">不限</option><option value="1">是</option><option value="0">否</option></select>
+      <span class="lbl" style="min-width:auto">HERO防守方</span>
+      <select id="defSel"><option value="any">不限</option><option value="1">是</option><option value="0">否</option></select>
+      <span class="hint">按翻前最后加注者判定：进攻方 = Hero 是翻前最后加注的人；防守方 = 最后加注的是对手且 Hero 翻前没弃牌</span>
     </div>
   </details>
   <details open><summary>手牌</summary>
@@ -60,6 +65,17 @@
       <select id="aiSel"><option value="any">不限</option><option value="1">是</option><option value="0">否</option></select>
       <span class="lbl" style="min-width:auto">进翻人数</span>
       <select id="nfSel"><option value="any">不限</option><option value="2">单挑 (2)</option><option value="3">3人</option><option value="4">4人+</option></select>
+    </div>
+    <div class="frow">
+      <span class="lbl">翻后位置</span>
+      <select id="ipSel"><option value="any">不限</option><option value="ip">IP（翻后后说话）</option><option value="oop">OOP（翻后先说话）</option></select>
+      <span class="hint">只算单挑池：进翻 2 人且 Hero 进了翻牌，多人池一律排除。按翻牌圈谁先说话判定</span>
+    </div>
+    <div class="frow">
+      <span class="lbl">hero动作</span>
+      <select id="hsSel"><option value="any">任一街</option><option value="1">翻牌</option><option value="2">转牌</option><option value="3">河牌</option></select>
+      <select id="haSel"><option value="any">不限</option><option value="ck">过牌</option><option value="ckr">过牌加注</option><option value="ckc">过牌跟注</option><option value="ckf">过牌弃牌</option><option value="b">下注</option><option value="r">加注</option><option value="c">跟注</option><option value="f">弃牌</option></select>
+      <span class="hint">只看翻后三街（翻前请用「翻前」分组的 Hero动作），自带街道、与「到达街道」互不影响：如 翻牌+跟注 → 翻牌上跟注的牌局（不管这手最后打到哪一街）。八个选项按该街最后一个动作归类，两两互斥（下注/加注/跟注/弃牌 = 该街没先过牌）</span>
     </div>
   </details>
   <details open><summary>结果</summary>
