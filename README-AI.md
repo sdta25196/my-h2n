@@ -78,7 +78,9 @@ client/vendor/chart.umd.min.js Chart.js 4.4.1
 | `GET /api/hands` | 20+ 筛选参数 + `page/per/sort/dir`，返回 `{page,per,total,pages,summary,rows}` |
 | `GET /api/report?minHands=100&from=&to=&stakes=` | `build_stats()` 聚合，全量约 0.4s；筛选参数下推到 SQL |
 
-`/api/hands` 参数（全部走 SQL，见 `hands.js` 的 `buildWhere`）：`stakes` `pos`（逗号分隔）、`hid`（`hand_id` 精确匹配，逗号分隔，容忍 `#` 前缀）、`from` `to`、`h1` `h2`（小时可跨天如 21~6）、`pa` `rt` `fc` `f3` `join`、`cards`（2/3/4 字符 token，逗号分隔）、`grp`（`pair|brdy|bs|bo|conn|gap1|axs`）、`st` `sd` `sdw` `ai` `nf`、`res` `bbMin` `bbMax` `potMin` `potMax`、`opp`、`fileId`。`sort` 只接受 `t|potbb|net|bb`（白名单，别改成拼接列名）；`per` 上限 500。
+`/api/hands` 参数（全部走 SQL，见 `hands.js` 的 `buildWhere`）：`stakes` `pos`（逗号分隔）、`hid`（`hand_id` 精确匹配，逗号分隔，容忍 `#` 前缀）、`from` `to`、`h1` `h2`（小时可跨天如 21~6）、`pa` `rt` `fc` `f3` `join`、`cards`（2/3/4 字符 token，逗号分隔）、`grp`（`pair|brdy|bs|bo|conn|gap1|axs`）、`fb`（翻牌面牌型，逗号分隔取「或」：`mono|two|rb|str|hi3|hi2|hi1|lo3|pair|trips`）、`st` `sd` `sdw` `ai` `nf`、`res` `bbMin` `bbMax` `potMin` `potMax`、`opp`、`fileId`。`sort` 只接受 `t|potbb|net|bb`（白名单，别改成拼接列名）；`per` 上限 500。
+
+`fb` 直接在 `flop` 文本上按定长位置取牌（第 1/4/7 位是三张牌，run it twice 只取第一个牌面），所以必须先卡 `length(flop) >= 8` 把没翻牌的手排掉，否则 `instr` 返回 0 会混进结果。口径：高张 = `T~A`（序号 ≥ 9），`hi3/hi2/hi1/lo3` 按高张张数分档，四档互斥且覆盖全部有翻牌的手；`mono/two/rb` 同理按花色分三档；`str` = 三连张（点数互不相同且极差 2，另加 A23 轮子，用 `min=1 AND max=13 AND 和=16` 唯一识别）；`pair` 不含 `trips`。
 
 行字段是缩写（`id t ts lv bl pos cd hg pa rba rn f3 st sd sdw ai nf pot potbb net bb inv col rk sp fl tu ri opp act`），前端直接按这套用。
 

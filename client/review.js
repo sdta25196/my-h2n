@@ -1,5 +1,11 @@
 // 复盘页：筛选/排序/分页全部交给 /api/hands，页面逻辑与 hand_browser.py 生成页保持一致
 const POS = ['UTG', 'MP', 'CO', 'BTN', 'SB', 'BB'];
+// flop 牌型 chips：[后端值, 显示名]
+const FLOP_BRD = [
+  ['mono', '天花面'], ['two', '两同花'], ['rb', '彩虹面'], ['str', '天顺面'],
+  ['hi3', '三高张'], ['hi2', '双高张'], ['hi1', '单高张'], ['lo3', '三小'],
+  ['pair', '对子面'], ['trips', '三条面'],
+];
 const SU = { s: '♠', h: '♥', d: '♦', c: '♣' };
 const $ = (id) => document.getElementById(id);
 
@@ -27,11 +33,12 @@ const num = (id) => {
 };
 
 function mkChips(el, values) {
-  values.forEach((v) => {
+  values.forEach((x) => {
+    const [v, txt] = Array.isArray(x) ? x : [x, x];
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'chip';
-    b.textContent = v;
+    b.textContent = txt;
     b.dataset.v = v;
     b.onclick = () => {
       b.classList.toggle('on');
@@ -66,6 +73,8 @@ function params() {
   put('join', $('joinSel').value);
   put('cards', $('cardTxt').value.trim());
   put('grp', $('grpSel').value);
+  const fb = selSet($('g_fb'));
+  if (fb.length) q.set('fb', fb.join(','));
   put('st', $('stSel').value);
   put('hs', $('hsSel').value);
   put('ha', $('haSel').value);
@@ -232,7 +241,7 @@ $('perSel').onchange = () => {
   load();
 };
 $('resetBtn').onclick = () => {
-  ['g_lv', 'g_pos'].forEach((id) => $(id).querySelectorAll('.chip.on').forEach((b) => b.classList.remove('on')));
+  ['g_lv', 'g_pos', 'g_fb'].forEach((id) => $(id).querySelectorAll('.chip.on').forEach((b) => b.classList.remove('on')));
   ['d1', 'd2', 'hidTxt', 'cardTxt', 'oppTxt', 'bbMin', 'bbMax', 'potMin', 'potMax'].forEach((id) => ($(id).value = ''));
   $('h1').value = '0';
   $('h2').value = '23';
@@ -254,6 +263,7 @@ document.querySelectorAll('#filters select,#filters input').forEach((el) => {
   }
   $('h2').value = '23';
   mkChips($('g_pos'), POS);
+  mkChips($('g_fb'), FLOP_BRD);
 
   // 从 URL 预填手牌编号筛选（数据页热图明细点击编号跳转过来）
   const hid0 = new URLSearchParams(location.search).get('hid');
