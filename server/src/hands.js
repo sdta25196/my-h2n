@@ -49,6 +49,33 @@ const SEQ_SQL = {
 const HU = 'nf = 2 AND saw_flop = 1';
 const FLOP_HEAD = "substr(act, instr(act, '|') + 1, 2)";
 
+// 翻牌面牌型：flop 形如 'As Kd 2c'，三张牌固定落在第 1/4/7 位（run it twice 只看第一个牌面）
+// FR 取牌力序号（1=2 … 9=T … 13=A），FS 取花色字母；无翻牌的手 flop 为空串，靠 length 兜掉
+const FR = (i) => `instr('23456789TJQKA', substr(flop, ${i * 3 + 1}, 1))`;
+const FS = (i) => `substr(flop, ${i * 3 + 2}, 1)`;
+const F_MONO = `${FS(0)} = ${FS(1)} AND ${FS(1)} = ${FS(2)}`;
+const F_RB = `${FS(0)} <> ${FS(1)} AND ${FS(0)} <> ${FS(2)} AND ${FS(1)} <> ${FS(2)}`;
+const F_TRIPS = `${FR(0)} = ${FR(1)} AND ${FR(1)} = ${FR(2)}`;
+const F_DIST = `${FR(0)} <> ${FR(1)} AND ${FR(0)} <> ${FR(2)} AND ${FR(1)} <> ${FR(2)}`;
+// 高张 = T~A（序号 >= 9），布尔相加得高张张数；三小 = 三张都 <= 9
+const F_HI = `((${FR(0)} >= 9) + (${FR(1)} >= 9) + (${FR(2)} >= 9))`;
+// 天顺面 = 三连张（已可能成顺）：点数互不相同且极差为 2；A23 按轮子另算（1+2+13=16 唯一）
+const F_MAX = `max(${FR(0)}, ${FR(1)}, ${FR(2)})`;
+const F_MIN = `min(${FR(0)}, ${FR(1)}, ${FR(2)})`;
+const F_WHEEL = `${F_MIN} = 1 AND ${F_MAX} = 13 AND ${FR(0)} + ${FR(1)} + ${FR(2)} = 16`;
+const FLOP_SQL = {
+  mono: F_MONO,
+  two: `NOT (${F_MONO}) AND NOT (${F_RB})`,
+  rb: F_RB,
+  str: `(${F_DIST} AND ${F_MAX} - ${F_MIN} = 2) OR (${F_WHEEL})`,
+  hi3: `${F_HI} = 3`,
+  hi2: `${F_HI} = 2`,
+  hi1: `${F_HI} = 1`,
+  lo3: `${F_HI} = 0`,
+  pair: `NOT (${F_TRIPS}) AND (${FR(0)} = ${FR(1)} OR ${FR(0)} = ${FR(2)} OR ${FR(1)} = ${FR(2)})`,
+  trips: F_TRIPS,
+};
+
 function buildWhere(q) {
   const w = [];
   const args = [];
@@ -181,6 +208,15 @@ function buildWhere(q) {
   if (grp && grp !== 'any') {
     if (!GROUP_SQL[grp]) throw new Error('未知的起手牌分组: ' + grp);
     w.push(`hand_group <> '' AND (${GROUP_SQL[grp]})`);
+  }
+  // 翻牌面牌型：多选之间是「或」，且只保留发出了翻牌的手
+  const fb = list('fb');
+  if (fb.length) {
+    const ors = fb.map((k) => {
+      if (!FLOP_SQL[k]) throw new Error('未知的翻牌面牌型: ' + k);
+      return `(${FLOP_SQL[k]})`;
+    });
+    w.push(`length(flop) >= 8 AND (${ors.join(' OR ')})`);
   }
   const opp = (q.get('opp') || '').trim().toUpperCase();
   if (opp) {
