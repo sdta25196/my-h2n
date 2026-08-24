@@ -11,13 +11,24 @@ import { createStreamParser } from './parser.js';
 import { abortUpload, beginUpload, createWriter, finishUpload, findFileBySha, listFiles, openDb, totals } from './db.js';
 import { queryHands } from './hands.js';
 import { buildReport } from './report.js';
+import { isSea, getAsset } from 'node:sea';
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-const ROOT = join(HERE, '..', '..');
-const CLIENT_DIR = join(ROOT, 'client');
-const DATA_DIR = process.env.DATA_DIR || join(ROOT, 'server', 'data');
-const TMP_DIR = join(DATA_DIR, 'tmp');
+// 打包成单文件 exe（Node SEA）后：前端资源嵌在 exe 里，数据落 exe 同目录
+// 注意 SEA 分支不能碰 import.meta.url —— esbuild 输出 CJS 时它会变成 undefined
+const IN_SEA = isSea();
 const PORT = +(process.env.PORT || 3000);
+
+let CLIENT_DIR = null; // SEA 下为 null，静态资源改从 sea assets 读
+let DATA_DIR;
+if (IN_SEA) {
+  DATA_DIR = process.env.DATA_DIR || join(dirname(process.execPath), 'data');
+} else {
+  const HERE = dirname(fileURLToPath(import.meta.url));
+  const ROOT = join(HERE, '..', '..');
+  CLIENT_DIR = join(ROOT, 'client');
+  DATA_DIR = process.env.DATA_DIR || join(ROOT, 'server', 'data');
+}
+const TMP_DIR = join(DATA_DIR, 'tmp');
 const MAX_UPLOAD = 500 * 1024 * 1024;
 
 mkdirSync(TMP_DIR, { recursive: true });
@@ -40,12 +51,31 @@ const sendJson = (res, code, body) => {
 
 function serveStatic(res, pathname) {
   const rel = normalize(pathname === '/' ? '/index.html' : pathname).replace(/^[/\\]+/, '');
-  const file = join(CLIENT_DIR, rel);
-  if (!file.startsWith(CLIENT_DIR) || !existsSync(file) || !statSync(file).isFile()) {
+  const send404 = () => {
     res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
     res.end('404 Not Found');
-    return;
+  };
+
+  if (IN_SEA) {
+    // asset 的 key 一律正斜杠，而 Windows 上 normalize() 会把 / 变成 \，得转回来
+    const key = rel.replace(/\\/g, '/');
+    if (key.split('/').includes('..')) return send404();
+    let buf;
+    try {
+      buf = Buffer.from(getAsset(key));
+    } catch {
+      return send404(); // asset 不存在时 getAsset 是抛异常，不是返回 undefined
+    }
+    res.writeHead(200, {
+      'content-type': MIME[extname(key)] || 'application/octet-stream',
+      'content-length': buf.length,
+      'cache-control': 'no-cache',
+    });
+    return res.end(buf);
   }
+
+  const file = join(CLIENT_DIR, rel);
+  if (!file.startsWith(CLIENT_DIR) || !existsSync(file) || !statSync(file).isFile()) return send404();
   res.writeHead(200, { 'content-type': MIME[extname(file)] || 'application/octet-stream', 'cache-control': 'no-cache' });
   createReadStream(file).pipe(res);
 }
@@ -157,3 +187,5 @@ server.listen(PORT, () => {
   console.log(`my-h2n 服务端已启动: http://localhost:${PORT}`);
   console.log(`数据库: ${join(DATA_DIR, 'poker.db')}`);
 });
+
+export { server };

@@ -8,7 +8,7 @@
 后端：nodejs
 前端:html js css
 
-**零外部依赖**是硬约束：只用 `node:http` / `node:sqlite` / `node:readline` / `node:crypto` / `node:fs`。没有 npm 依赖、没有构建步骤、没有框架。改代码时不要引入任何包（Chart.js 是唯一第三方，已 vendor 到 `client/vendor/chart.umd.min.js`）。ESM（`"type": "module"`），要求 Node ≥ 22.5（`node:sqlite` 起始版本），本机 v24.19.0。
+**零外部依赖**是硬约束：只用 `node:http` / `node:sqlite` / `node:readline` / `node:crypto` / `node:fs`。没有 npm 运行时依赖、没有框架。改代码时不要引入任何包（Chart.js 是唯一第三方，已 vendor 到 `client/vendor/chart.umd.min.js`）。ESM（`"type": "module"`），要求 Node ≥ 22.5（`node:sqlite` 起始版本），本机 v22.22.1。唯一的构建步骤只服务于打包 exe（见「打包成绿色版 exe」），日常开发不需要构建。
 
 ## 跑起来
 
@@ -28,8 +28,11 @@ server/src/db.js       257 行  schema + 两层去重 + 批量事务写入
 server/src/hands.js    259 行  GET /api/hands：SQL 筛选/分页/汇总
 server/src/report.js   398 行  GET /api/report：实时聚合（build_stats 移植）
 server/src/index.js    150 行  路由 + 上传 + 静态托管
+server/src/main-sea.js         打包 exe 时的入口（起服务 + 开浏览器），开发模式不加载
 server/scripts/verify.js       解析器对拍（需 Python 基准 JSON，见下）
 server/scripts/reset.js        清库
+scripts/build-sea.sh           打包单文件 exe
+sea-config.json                SEA 配置（前端资源清单在这里）
 client/index.html+upload.js    上传页
 client/data.html+data.js       数据页（暗色，1:1 复刻 poker_report.py）
 client/review.html+review.js   复盘页（浅色，1:1 复刻 hand_browser.py）
@@ -91,6 +94,23 @@ client/vendor/chart.umd.min.js Chart.js 4.4.1
 
 `pos` 是 `POS_ORDER=['UTG','MP','CO','BTN','SB','BB']` 的下标，`-1` = 未识别。`ts` 是分钟戳（与前端 `t` 一致），日期筛选用 `ts_text`。索引在 `ts` / `(stakes,ts)` / `pos` / `hand_group` / `file_id`。加字段要同步改三处：`SCHEMA`、`INSERT_HAND`（含 `Array(44)` 的占位数量）、`handRow()`。
 
+## 打包成绿色版 exe
+
+`bash scripts/build-sea.sh` → `dist/my-h2n.exe`（约 84MB，已 gitignore）。单文件发给别人双击即用：起服务 + 用默认浏览器打开 localhost:3000，数据库建在 **exe 同目录的 `data/`**。
+
+路线是 Node SEA：esbuild 把 ESM 打成单个 CJS（SEA 入口只支持 CJS）→ `node --experimental-sea-config sea-config.json` 生成 blob（`client/` 的 10 个文件作为 SEA assets 嵌进去）→ 复制 node.exe → postject 注入。esbuild / postject 都走 npx，**只是构建期工具，不进 dependencies**，运行时产物仍零依赖。
+
+`index.js` 里靠 `isSea()` 分双支，非 SEA 分支行为与打包前逐字相同。四个必须记住的约束：
+
+1. **SEA 分支绝不能碰 `import.meta.url`** —— esbuild 输出 CJS 时它被编译成 `undefined`，`fileURLToPath(undefined)` 直接抛 `ERR_INVALID_ARG_TYPE`。构建时那条 `empty-import-meta` 警告是预期的（该行只在开发模式执行）。
+2. **asset key 一律正斜杠**。Windows 上 `normalize('/vendor/x.js')` 会给出 `vendor\x.js`，不转回 `/` 就取不到 `vendor/chart.umd.min.js`，表现为图表画不出来。
+3. **`getAsset()` 找不到 key 是抛异常**（`ERR_SINGLE_EXECUTABLE_APPLICATION_ASSET_NOT_FOUND`），不是返回 undefined，必须 try/catch。
+4. **postject 必须传 `--sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2`**。Node 编译时覆盖了 postject 的默认 sentinel；不传则注入「成功」但 `isSea()` 永远 false，exe 表现为空跑退出。
+
+新增 client 文件必须同步加进 `sea-config.json` 的 `assets`，否则开发模式好使、exe 里 404。`main-sea.js` 不能用顶层 await（`--format=cjs` 直接报错）。`disableExperimentalSEAWarning` + `execArgv:["--no-warnings"]` 一起用来消掉 SEA 和 `node:sqlite` 的实验性警告，去掉任一条对方开窗就会看到英文报警。
+
+postject 注入后 node.exe 原有的 OpenJS Foundation 签名失效（构建时 `warning: The signature seems corrupted!` 是预期的），对方首次运行 SmartScreen 可能拦，需点「更多信息 → 仍要运行」。
+
 ## 已验证 / 未验证
 
 已验证：
@@ -100,8 +120,9 @@ client/vendor/chart.umd.min.js Chart.js 4.4.1
 - `/api/report` 与 `poker_report.py` 递归比对：结构量全等（场次 28/28、by_day 13/13、牌型 169/169、曲线点 1186/1186），15 处数值差全部来自上面两处有意分歧
 - 展示层：237 条渲染字符串与 Python f-string 逐条比对，0 不一致
 - 两个页面用 DOM/Chart/fetch 桩做过无头冒烟
+- `dist/my-h2n.exe` 在带空格和中文的空目录里跑通：10 个静态资源 HTTP 200 且字节数与磁盘全等、路径穿越被挡、上传管道（临时文件→流式解析→回滚→清理）完整、拷入真实库后 `/api/totals` 29658 手 / `/api/report` net -397.25 / by_day 13 / 牌型 169 / 场次 28 与基准逐项吻合、端口占用时有中文提示且不闪退、控制台无任何实验性警告
 
-**没验证**：真实浏览器里的图表绘制、热图点击弹窗、筛选器交互。动前端渲染的话，改完让用户开页面确认，别声称已测。
+**没验证**：真实浏览器里的图表绘制、热图点击弹窗、筛选器交互（exe 里同样没验证，只确认了 Chart.js 的字节流对得上）。动前端渲染的话，改完让用户开页面确认，别声称已测。
 
 ## 坑
 

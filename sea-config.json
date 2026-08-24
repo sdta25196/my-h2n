@@ -1,0 +1,18 @@
+{
+  "main": "dist/main.cjs",
+  "output": "dist/sea-prep.blob",
+  "disableExperimentalSEAWarning": true,
+  "execArgv": ["--no-warnings"],
+  "assets": {
+    "index.html": "client/index.html",
+    "data.html": "client/data.html",
+    "review.html": "client/review.html",
+    "app.css": "client/app.css",
+    "data.css": "client/data.css",
+    "review.css": "client/review.css",
+    "upload.js": "client/upload.js",
+    "data.js": "client/data.js",
+    "review.js": "client/review.js",
+    "vendor/chart.umd.min.js": "client/vendor/chart.umd.min.js"
+  }
+}
