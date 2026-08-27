@@ -69,6 +69,7 @@ function params() {
   put('rt', $('rtSel').value);
   put('agg', $('aggSel').value);
   put('def', $('defSel').value);
+  put('h4b', $('h4bSel').value);
   put('f3', $('f3Sel').value);
   put('join', $('joinSel').value);
   put('cards', $('cardTxt').value.trim());
@@ -245,7 +246,7 @@ $('resetBtn').onclick = () => {
   ['d1', 'd2', 'hidTxt', 'cardTxt', 'oppTxt', 'bbMin', 'bbMax', 'potMin', 'potMax'].forEach((id) => ($(id).value = ''));
   $('h1').value = '0';
   $('h2').value = '23';
-  ['paSel', 'rtSel', 'aggSel', 'defSel', 'f3Sel', 'joinSel', 'grpSel', 'stSel', 'hsSel', 'haSel', 'ipSel', 'sdSel', 'sdwSel', 'aiSel', 'nfSel', 'resSel'].forEach(
+  ['paSel', 'rtSel', 'aggSel', 'defSel', 'h4bSel', 'f3Sel', 'joinSel', 'grpSel', 'stSel', 'hsSel', 'haSel', 'ipSel', 'sdSel', 'sdwSel', 'aiSel', 'nfSel', 'resSel'].forEach(
     (id) => ($(id).value = 'any')
   );
   apply();
