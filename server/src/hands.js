@@ -150,6 +150,14 @@ function buildWhere(q) {
   if (def === '1') w.push(DEF);
   else if (def === '0') w.push(`NOT (${DEF})`);
 
+  // Hero 4bet+：raises_pf_json 是 Hero 翻前每次加注「之前的加注数」的数组
+  // （0 = 这次是开池，1 = 3bet，2 = 4bet …），只要有任一项 >= 2 就说明 Hero 做过 4bet 及以上
+  // 与「加注类型 = 4bet+」（看 rn，只认 Hero 的首个动作）不同：这里覆盖开池被 3bet 后再 4bet 的手
+  const H4B = `EXISTS (SELECT 1 FROM json_each(raises_pf_json) WHERE value >= 2)`;
+  const h4b = q.get('h4b');
+  if (h4b === '1') w.push(H4B);
+  else if (h4b === '0') w.push(`NOT ${H4B}`);
+
   const join = q.get('join');
   if (join === 'yes') w.push("pa <> 'F'");
   else if (join === 'no') w.push("pa = 'F'");

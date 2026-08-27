@@ -13,13 +13,15 @@ const RE_HEADER = /^CoinPoker Hand #(\d+): NLH \(₮([\d.]+)\/₮([\d.]+)(?:\/�
 const RE_TABLE = /^Table '(\S+)' (\d+)-max Seat #(\d+) is the button/;
 const RE_SEAT = /^Seat (\d+): (\S+) \(₮([\d.]+) in chips\)/;
 const RE_ACTION = /^(\S+): (folds|checks|calls ₮([\d.]+)|bets ₮([\d.]+)|raises ₮([\d.]+) to ₮([\d.]+))/;
-const RE_POST = /^(\S+): posts (ante|small blind|big blind) ₮([\d.]+)/;
+const RE_POST = /^(\S+): posts (ante|small blind|auto big blind|big blind) ₮([\d.]+)/;
 const RE_ALLIN = /^(\S+): ALLIN ₮([\d.]+)/;
 const RE_AUTOBB = /^(\S+): AUTOBB ₮([\d.]+)/;
 const RE_STRADDLE = /^(\S+): STRADDLE ₮([\d.]+)/;
 const RE_DEALT = /^Dealt to Hero \[(\S+) (\S+)\]/;
 const RE_RETURN = /^(\S+): RETURN ₮([\d.]+)/;
 const RE_COLLECT = /^(\S+) collected ₮([\d.]+) from pot/;
+// 全下保险：牌谱不写 collected 行，且同一手内可能重复多行（金额相同），按人去重
+const RE_CASHOUT = /^(\S+) cashed out the hand for ₮([\d.]+)/;
 const RE_SHOWS = /^(\S+): shows \[(\S+) (\S+)\]/;
 const RE_TOTAL = /^Total pot ₮([\d.]+) \| Rake ₮([\d.]+)(?: \| Splash Fee ₮([\d.]+))?/;
 const RE_SPLASH_DROP = /^(?:MEGA )?SPLASH dropped ₮([\d.]+)/;
@@ -117,6 +119,8 @@ export function parseHand(lines) {
     rakeC: 0,
     splashC: 0,
     splashDropC: 0,
+    splashWonC: 0,
+    cashOutC: 0,
     invested: new Map(),
     folded: new Set(),
     heroFoldedStreet: null,
@@ -141,6 +145,8 @@ export function parseHand(lines) {
   let sd = false;
   let hsd = false;
   let ai = false;
+  let collectedC = 0;
+  const cashOut = new Map();
 
   const cAdd = (map, p, d) => map.set(p, (map.get(p) || 0) + d);
   const invest = (p, d) => {
@@ -217,7 +223,13 @@ export function parseHand(lines) {
     }
     const mc = RE_COLLECT.exec(line);
     if (mc) {
+      collectedC += cents(mc[2]);
       if (mc[1] === 'Hero') h.heroCollected += cents(mc[2]);
+      continue;
+    }
+    const mco = RE_CASHOUT.exec(line);
+    if (mco) {
+      cashOut.set(mco[1], cents(mco[2]));
       continue;
     }
     const msh = RE_SHOWS.exec(line);
@@ -349,6 +361,15 @@ export function parseHand(lines) {
   }
 
   // ---- 派生字段 ----
+  // SPLASH 注入的钱算在 Total pot 里，但派彩不写 collected 行，按 collected 占比分给赢家
+  if (h.splashDropC > 0 && h.heroCollected > 0) {
+    h.splashWonC = Math.round((h.splashDropC * h.heroCollected) / collectedC);
+    h.heroCollected += h.splashWonC;
+  }
+  // 全下保险的赔付要放在 SPLASH 之后：cash out 的人没赢池，不该分到 SPLASH
+  h.cashOutC = cashOut.get('Hero') ?? 0;
+  h.heroCollected += h.cashOutC;
+
   h.netC = h.heroCollected - h.heroInvested;
 
   const fp = h.firstPf;
