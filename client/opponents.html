@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>对手 · my-h2n</title>
+<link rel="stylesheet" href="app.css">
+<link rel="stylesheet" href="opponents.css">
+</head>
+<body>
+<nav>
+  <h1>my-h2n</h1>
+  <a class="tab" href="index.html">上传</a>
+  <a class="tab" href="data.html">数据</a>
+  <a class="tab" href="review.html">复盘</a>
+  <a class="tab on" href="opponents.html">对手</a>
+</nav>
+
+<div id="loading" class="empty card">加载中…</div>
+
+<div id="page" hidden>
+  <div id="filters" class="card">
+    <div class="frow">
+      <label>玩家 <input type="text" id="fq" placeholder="用户名包含…" autocomplete="off"></label>
+      <label>最少手数 <input type="number" id="fMin" min="1" step="10" value="30"></label>
+      <label>日期 <input type="date" id="fFrom"> — <input type="date" id="fTo"></label>
+      <button class="ghost" id="fReset">重置</button>
+    </div>
+    <div class="frow">
+      <span class="dim small">级别</span><span id="fStakes" class="chips"></span>
+      <span class="dim small">位置</span><span id="fPos" class="chips"></span>
+    </div>
+  </div>
+
+  <div id="sumbar" class="sumbar"></div>
+
+  <div class="table-scroll">
+    <table id="tbl">
+      <thead><tr>
+        <th class="s" data-k="player">玩家</th>
+        <th class="s" data-k="hands">手数</th>
+        <th class="s" data-k="vpip" title="主动入池率 = 翻前跟注或加注 / 总手数">VPIP</th>
+        <th class="s" data-k="pfr" title="翻前加注率 = 翻前加注 / 总手数">PFR</th>
+        <th class="s" data-k="t3b" title="3bet 率 = 面对单次加注时再加注 / 该机会数">3B</th>
+        <th class="s" data-k="f3b" title="被 3bet 后弃牌率 = 开池被 3bet 后弃牌 / 被 3bet 次数">F3B</th>
+        <th class="s" data-k="steal" title="偷盲率 = CO/BTN/SB 无人入池时开池 / 该机会数">ATS</th>
+        <th class="s" data-k="cbet" title="翻牌持续下注率 = 翻前侵略者在翻牌下注 / 有此机会">CB</th>
+        <th class="s" data-k="fcb" title="面对持续下注弃牌率">FCB</th>
+        <th class="s" data-k="wtsd" title="看到翻牌后走到摊牌的比例">WTSD</th>
+        <th class="s" data-k="wsd" title="摊牌获胜率 = 摊牌且净赢 / 摊牌次数">W$SD</th>
+        <th class="s" data-k="wwsf" title="看到翻牌后赢下的比例">WWSF</th>
+        <th class="s" data-k="af" title="翻后激进度 = (下注+加注) / 跟注">AF</th>
+        <th class="s" data-k="bb100" title="每 100 手净盈亏（bb）">bb/100</th>
+        <th class="s" data-k="net" title="净盈亏（₮）">净盈亏</th>
+        <th title="以该对手为 Hero 的逐手复盘（新标签打开）">明细</th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+
+  <div class="pager">
+    <button class="ghost" id="prev">上一页</button>
+    <span id="pginfo" class="dim small"></span>
+    <button class="ghost" id="next">下一页</button>
+  </div>
+
+  <div class="dim small legend">
+    百分比分母不足时显示 <b>—</b>。手数越少指标噪声越大，默认只列 ≥30 手的对手。
+    颜色只是相对基准的偏离提示（<span class="hi">偏高</span> / <span class="lo">偏低</span>），不代表好坏。
+  </div>
+</div>
+
+<script src="opponents.js"></script>
+</body>
+</html>

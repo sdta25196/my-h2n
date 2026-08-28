@@ -8,8 +8,12 @@ import { pipeline } from 'node:stream/promises';
 import { extname, join, normalize, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createStreamParser } from './parser.js';
+import { createOppStreamParser, isOppHeader } from './opp-parser.js';
 import { abortUpload, beginUpload, createWriter, finishUpload, findFileBySha, listFiles, openDb, totals } from './db.js';
+import { createOppWriter, oppTotals } from './opp-db.js';
 import { queryHands } from './hands.js';
+import { queryOppHands } from './opp-hands.js';
+import { queryOpponents } from './opponents.js';
 import { buildReport } from './report.js';
 import { isSea, getAsset } from 'node:sea';
 
@@ -89,7 +93,8 @@ function safeUnlink(file) {
 }
 
 // 上传：请求体为牌谱原文（不走 multipart），文件名放在 x-filename 头里
-async function handleUpload(req, res) {
+// kind: 'hero' = 我的牌谱走 parser.js/hands 表；'opp' = 对手牌谱走 opp-parser.js/opp_* 表
+async function handleUpload(req, res, kind) {
   const declared = +(req.headers['content-length'] || 0);
   if (declared > MAX_UPLOAD) return sendJson(res, 413, { error: '文件过大（上限 500MB）' });
 
@@ -115,21 +120,38 @@ async function handleUpload(req, res) {
     safeUnlink(tmp);
     return sendJson(res, 200, {
       status: 'duplicate_file',
-      message: `该文件已于 ${dup.uploaded_at} 上传过（${dup.filename}），跳过解析`,
+      message: `该文件已于 ${dup.uploaded_at} 上传过（${dup.filename}，${dup.kind === 'opp' ? '对手' : '我的'}牌谱），跳过解析`,
       file: dup,
       totals: totals(db),
+      opp: oppTotals(db),
     });
   }
 
-  const fileId = beginUpload(db, { filename, sha256, size: bytes });
-  const writer = createWriter(db, fileId);
+  const isOpp = kind === 'opp';
+  const fileId = beginUpload(db, { filename, sha256, size: bytes, kind });
+  const writer = isOpp ? createOppWriter(db, fileId) : createWriter(db, fileId);
   const t0 = Date.now();
   try {
-    const parser = createStreamParser((h) => writer.add(h));
+    const parser = isOpp ? createOppStreamParser((h) => writer.add(h)) : createStreamParser((h) => writer.add(h));
+    // 边解析边嗅探格式：两种牌谱的 header 互斥，传错拖拽区要明确报错而不是静默存歪
+    let wrongFormat = false;
     const rl = createInterface({ input: createReadStream(tmp, 'utf8'), crlfDelay: Infinity });
-    for await (const line of rl) parser.line(line);
+    for await (const line of rl) {
+      if (!wrongFormat && line.startsWith('CoinPoker Hand') && isOppHeader(line) !== isOpp) wrongFormat = true;
+      parser.line(line);
+    }
     parser.end();
     const stats = writer.commit();
+    if (wrongFormat && stats.total === 0) {
+      writer.rollback();
+      abortUpload(db, fileId);
+      safeUnlink(tmp);
+      return sendJson(res, 400, {
+        error: isOpp
+          ? '这看起来是「我的牌谱」（Hero 视角），请拖到上面那个区域'
+          : '这看起来是「对手牌谱」（整桌视角），请拖到下面那个区域',
+      });
+    }
     if (stats.total === 0) {
       abortUpload(db, fileId);
       safeUnlink(tmp);
@@ -139,6 +161,7 @@ async function handleUpload(req, res) {
     safeUnlink(tmp);
     sendJson(res, 200, {
       status: 'ok',
+      kind,
       file,
       stats: {
         ...stats,
@@ -147,6 +170,7 @@ async function handleUpload(req, res) {
         elapsedMs: Date.now() - t0,
       },
       totals: totals(db),
+      opp: oppTotals(db),
     });
   } catch (err) {
     writer.rollback();
@@ -160,10 +184,23 @@ const server = createServer((req, res) => {
   const url = new URL(req.url, 'http://localhost');
   const p = url.pathname;
   try {
-    if (req.method === 'POST' && p === '/api/upload') return void handleUpload(req, res);
-    if (req.method === 'GET' && p === '/api/files') return sendJson(res, 200, { files: listFiles(db), totals: totals(db) });
+    if (req.method === 'POST' && p === '/api/upload') {
+      // kind 走 query：'opp' 进对手管线，其余（含缺省）按我的牌谱处理
+      const kind = url.searchParams.get('kind') === 'opp' ? 'opp' : 'hero';
+      return void handleUpload(req, res, kind);
+    }
+    if (req.method === 'GET' && p === '/api/files')
+      return sendJson(res, 200, { files: listFiles(db), totals: totals(db), opp: oppTotals(db) });
     if (req.method === 'GET' && p === '/api/totals') return sendJson(res, 200, totals(db));
+    if (req.method === 'GET' && p === '/api/opp-totals') return sendJson(res, 200, oppTotals(db));
+    if (req.method === 'GET' && p === '/api/opponents') return sendJson(res, 200, queryOpponents(db, url.searchParams));
     if (req.method === 'GET' && p === '/api/hands') return sendJson(res, 200, queryHands(db, url.searchParams));
+    if (req.method === 'GET' && p === '/api/opp-hands') {
+      // player 是必填：没有它这个接口没有意义，缺失当参数错误（400）而不是 500
+      if (!(url.searchParams.get('player') || '').trim())
+        return sendJson(res, 400, { error: '缺少 player 参数' });
+      return sendJson(res, 200, queryOppHands(db, url.searchParams));
+    }
     if (req.method === 'GET' && p === '/api/report') {
       const sp = url.searchParams;
       const from = sp.get('from') || '';

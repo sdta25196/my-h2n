@@ -7,12 +7,17 @@
     "index.html": "client/index.html",
     "data.html": "client/data.html",
     "review.html": "client/review.html",
+    "opponents.html": "client/opponents.html",
+    "opp-review.html": "client/opp-review.html",
     "app.css": "client/app.css",
     "data.css": "client/data.css",
     "review.css": "client/review.css",
+    "opponents.css": "client/opponents.css",
     "upload.js": "client/upload.js",
     "data.js": "client/data.js",
     "review.js": "client/review.js",
+    "opponents.js": "client/opponents.js",
+    "opp-review.js": "client/opp-review.js",
     "vendor/chart.umd.min.js": "client/vendor/chart.umd.min.js"
   }
 }

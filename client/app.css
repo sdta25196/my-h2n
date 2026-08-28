@@ -34,16 +34,21 @@ h2 { font-size: 15px; margin: 22px 0 10px; }
 .pos { color: var(--green); font-weight: 700; }
 .neg { color: var(--red); font-weight: 700; }
 
-#drop {
+.drop {
   border: 1.5px dashed var(--line);
   border-radius: 14px;
   background: var(--card2);
-  padding: 30px 20px;
+  padding: 26px 20px;
   text-align: center;
   transition: border-color .15s, background .15s;
 }
-#drop.hot { border-color: var(--blue); background: #10203a; }
-#drop .big { font-size: 15px; margin-bottom: 6px; }
+.drop.hot { border-color: var(--blue); background: #10203a; }
+.drop .big { font-size: 15px; margin-bottom: 6px; }
+.drops { display: grid; gap: 12px; grid-template-columns: 1fr 1fr; }
+@media (max-width: 780px) { .drops { grid-template-columns: 1fr; } }
+.tag { font-size: 11px; border: 1px solid var(--line); border-radius: 6px; padding: 1px 6px; color: var(--dim); }
+.tag.opp { color: var(--amber); border-color: #4a3a1a; }
+.tag.hero { color: var(--blue); border-color: #1d3a52; }
 button {
   background: var(--blue);
   color: #06121f;

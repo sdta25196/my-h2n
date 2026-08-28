@@ -7,6 +7,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { POS_ORDER, toRecord } from './parser.js';
+import { OPP_SCHEMA, abortOppUpload } from './opp-db.js';
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS upload_files (
@@ -18,7 +19,8 @@ CREATE TABLE IF NOT EXISTS upload_files (
   hands_new     INTEGER NOT NULL,
   check_total   INTEGER NOT NULL,
   check_passed  INTEGER NOT NULL,
-  uploaded_at   TEXT NOT NULL
+  uploaded_at   TEXT NOT NULL,
+  kind          TEXT NOT NULL DEFAULT 'hero'   -- 'hero' = 我的牌谱 / 'opp' = 对手牌谱
 );
 
 CREATE TABLE IF NOT EXISTS hands (
@@ -96,12 +98,44 @@ const tsText = (d) =>
   `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ` +
   `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 
+// 老库补列：CREATE TABLE IF NOT EXISTS 不会给已存在的表加新列，只能自己 ALTER
+// specs 形如 { 列名: '类型与默认值' }，只补缺的，已有数据不动
+function addMissingColumns(db, table, specs) {
+  const have = new Set(db.prepare(`PRAGMA table_info(${table})`).all().map((c) => c.name));
+  for (const [name, decl] of Object.entries(specs)) {
+    if (!have.has(name)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${name} ${decl}`);
+  }
+}
+
 export function openDb(file) {
   mkdirSync(dirname(file), { recursive: true });
   const db = new DatabaseSync(file);
   db.exec('PRAGMA journal_mode = WAL');
   db.exec('PRAGMA synchronous = NORMAL');
   db.exec(SCHEMA);
+  db.exec(OPP_SCHEMA);
+  addMissingColumns(db, 'upload_files', { kind: "TEXT NOT NULL DEFAULT 'hero'" });
+  // 对手复盘明细列（旧库补上后老行是默认值：没手牌没动作流，重导才完整）
+  addMissingColumns(db, 'opp_hands', {
+    st: 'INTEGER NOT NULL DEFAULT 0',
+    sd: 'INTEGER NOT NULL DEFAULT 0',
+    act: "TEXT NOT NULL DEFAULT ''",
+  });
+  addMissingColumns(db, 'opp_player_hands', {
+    seat: 'INTEGER NOT NULL DEFAULT 0',
+    cards: "TEXT NOT NULL DEFAULT ''",
+    hand_group: "TEXT NOT NULL DEFAULT ''",
+    opp_cards: "TEXT NOT NULL DEFAULT ''",
+    pa: "TEXT NOT NULL DEFAULT 'X'",
+    rn: 'INTEGER',
+    rba: 'INTEGER NOT NULL DEFAULT 0',
+    pf4b: 'INTEGER NOT NULL DEFAULT 0',
+    pf_agg: 'INTEGER NOT NULL DEFAULT 0',
+    pf_def: 'INTEGER NOT NULL DEFAULT 0',
+    sdw: 'INTEGER',
+    flop_first: 'INTEGER NOT NULL DEFAULT 0',
+    seq_json: "TEXT NOT NULL DEFAULT '{}'",
+  });
   return db;
 }
 
@@ -231,14 +265,14 @@ export function createWriter(db, fileId, batchSize = 1000) {
 }
 
 // hands.file_id 需要先有文件行，所以入库分两步：先占位，解析完再回填统计
-export function beginUpload(db, { filename, sha256, size }) {
+export function beginUpload(db, { filename, sha256, size, kind = 'hero' }) {
   const row = db
     .prepare(
       `INSERT INTO upload_files
-         (filename, sha256, size, hands_total, hands_new, check_total, check_passed, uploaded_at)
-       VALUES (?,?,?,0,0,0,0,?) RETURNING id`
+         (filename, sha256, size, hands_total, hands_new, check_total, check_passed, uploaded_at, kind)
+       VALUES (?,?,?,0,0,0,0,?,?) RETURNING id`
     )
-    .get(filename, sha256, size, new Date().toISOString());
+    .get(filename, sha256, size, new Date().toISOString(), kind);
   return Number(row.id);
 }
 
@@ -253,5 +287,6 @@ export function finishUpload(db, fileId, stats) {
 
 export function abortUpload(db, fileId) {
   db.prepare('DELETE FROM hands WHERE file_id = ?').run(fileId);
+  abortOppUpload(db, fileId);
   db.prepare('DELETE FROM upload_files WHERE id = ?').run(fileId);
 }

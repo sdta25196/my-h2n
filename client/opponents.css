@@ -1,0 +1,75 @@
+/* 对手页样式：沿用 app.css 的暗色变量，这里只加本页独有的筛选条 / 排序表头 / 分页 */
+#filters { margin-bottom: 12px; display: grid; gap: 10px; }
+.frow { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.frow label { display: flex; align-items: center; gap: 6px; color: var(--dim); font-size: 12px; }
+#filters input {
+  background: var(--card2);
+  border: 1px solid var(--line);
+  color: var(--tx);
+  border-radius: 7px;
+  padding: 5px 8px;
+  font-family: inherit;
+  font-size: 13px;
+}
+#filters input[type="text"] { width: 160px; }
+#filters input[type="number"] { width: 74px; }
+#filters input:focus { outline: 0; border-color: var(--blue); }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  background: var(--card2);
+  border: 1px solid var(--line);
+  color: var(--dim);
+  border-radius: 999px;
+  padding: 3px 11px;
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+.chip:hover { color: var(--tx); }
+.chip.on { background: #17314d; border-color: var(--blue); color: var(--tx); }
+
+.sumbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 9px 14px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+.sumbar b { font-weight: 700; }
+.sumbar .k { color: var(--dim); margin-right: 5px; }
+
+/* 可排序表头 */
+th.s { cursor: pointer; user-select: none; }
+th.s:hover { color: var(--tx); }
+th.s.sorted { color: var(--blue); }
+th.s.sorted::after { content: " ▾"; }
+th.s.sorted.asc::after { content: " ▴"; }
+
+#rows td { font-variant-numeric: tabular-nums; }
+#rows td.name { text-align: left; font-weight: 600; word-break: break-all; white-space: normal; }
+#rows tr:hover td { background: var(--card2); }
+/* 指标偏离提示：只是标出「显著高/低于常见基准」，不判断好坏 */
+.hi { color: var(--amber); }
+.lo { color: var(--blue); }
+
+/* 行末「复盘」按钮：跳到以该对手为 Hero 的复盘页（新标签） */
+.btn-sm {
+  display: inline-block;
+  background: var(--card2);
+  border: 1px solid var(--line);
+  color: var(--dim);
+  border-radius: 7px;
+  padding: 2px 9px;
+  font-size: 12px;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.btn-sm:hover { background: #17314d; border-color: var(--blue); color: var(--tx); }
+
+.pager { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+.legend { margin-top: 10px; }

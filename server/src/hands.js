@@ -1,5 +1,9 @@
 // GET /api/hands：服务端 SQL 筛选 + 分页 + 汇总条
 // 汇总口径与 hand_browser.py 的 summary() 一致（手数/净盈亏/bb100/VPIP/PFR/进翻率/W$SD/全下率）
+//
+// GROUP_SQL / SEQ_SQL / FLOP_SQL / HA_STREETS 四组片段被 opp-hands.js 原样复用：
+// 它们引用的是裸列名（hand_group / seq_json / flop），在对手侧那两张表里各只出现一次，
+// JOIN 后不会歧义。改这四组时记得对手复盘页跟着变。
 const SORTABLE = { t: 'ts', potbb: 'pot_bb', net: 'net_cents', bb: 'net_bb' };
 
 // 列表与汇总共用的派生列
@@ -14,7 +18,7 @@ const R2 = "instr('23456789TJQKA', substr(hand_group, 2, 1))";
 const PAIR = 'length(hand_group) = 2';
 const SUITED = "substr(hand_group, 3, 1) = 's'";
 const BRDY = "instr('TJQKA', substr(hand_group, 1, 1)) > 0 AND instr('TJQKA', substr(hand_group, 2, 1)) > 0";
-const GROUP_SQL = {
+export const GROUP_SQL = {
   pair: PAIR,
   brdy: `NOT ${PAIR} AND ${BRDY}`,
   bs: `NOT ${PAIR} AND ${BRDY} AND ${SUITED}`,
@@ -28,11 +32,11 @@ const GROUP_SQL = {
 // 只看翻后三街（翻前用「翻前」分组里的 pa 口径），下标与 st 列同一套编码
 // 一条街上 check 只可能出现在首位，所以「是否先过牌」看前缀、动作归类看最后一个动作
 // 八个选项 =（先过牌 or 没先过牌）×（最后 check/bet/raise/call/fold），两两互斥且覆盖全部有动作的街
-const HA_STREETS = { 1: 'flop', 2: 'turn', 3: 'river' };
+export const HA_STREETS = { 1: 'flop', 2: 'turn', 3: 'river' };
 const SEQ = (s) => `json_extract(seq_json, '$.${s}')`;
 const CK = (s) => `${SEQ(s)} LIKE '["check"%'`;
 const END = (s, kind) => `${SEQ(s)} LIKE '%"${kind}"]'`;
-const SEQ_SQL = {
+export const SEQ_SQL = {
   ck: (s) => `${CK(s)} AND ${END(s, 'check')}`,
   ckr: (s) => `${CK(s)} AND ${END(s, 'raise')}`,
   ckc: (s) => `${CK(s)} AND ${END(s, 'call')}`,
@@ -63,7 +67,7 @@ const F_HI = `((${FR(0)} >= 9) + (${FR(1)} >= 9) + (${FR(2)} >= 9))`;
 const F_MAX = `max(${FR(0)}, ${FR(1)}, ${FR(2)})`;
 const F_MIN = `min(${FR(0)}, ${FR(1)}, ${FR(2)})`;
 const F_WHEEL = `${F_MIN} = 1 AND ${F_MAX} = 13 AND ${FR(0)} + ${FR(1)} + ${FR(2)} = 16`;
-const FLOP_SQL = {
+export const FLOP_SQL = {
   mono: F_MONO,
   two: `NOT (${F_MONO}) AND NOT (${F_RB})`,
   rb: F_RB,

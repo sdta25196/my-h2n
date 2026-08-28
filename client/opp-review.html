@@ -1,18 +1,22 @@
 <!DOCTYPE html>
 <html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>牌局浏览器</title>
+<title>对手复盘</title>
 <link rel="stylesheet" href="review.css">
 </head><body>
 <nav class="topnav">
   <b>my-h2n</b>
   <a href="index.html">上传</a>
   <a href="data.html">数据</a>
-  <a class="on" href="review.html">复盘</a>
-  <a href="opponents.html">对手</a>
+  <a href="review.html">复盘</a>
+  <a class="on" href="opponents.html">对手</a>
+  <span id="who"></span>
 </nav>
 <section id="filters">
   <details open><summary>基础</summary>
+    <div class="frow"><span class="lbl">玩家</span>
+      <input type="text" id="plTxt" placeholder="对手用户名（区分大小写）">
+      <span class="hint">所有维度都以这个人为 Hero 计算。改成别人可直接换人复盘</span></div>
     <div class="frow"><span class="lbl">级别</span><span id="g_lv"></span></div>
     <div class="frow"><span class="lbl">位置</span><span id="g_pos"></span></div>
     <div class="frow"><span class="lbl">日期</span><input type="date" id="d1"><span>~</span><input type="date" id="d2">
@@ -21,27 +25,27 @@
       <span class="hint">小时可跨天，如 21 ~ 6</span></div>
     <div class="frow"><span class="lbl">手牌编号</span>
       <input type="text" id="hidTxt" placeholder="如 1234567890，多个用逗号分隔">
-      <span class="hint">牌谱里的 Hand # 编号，可从数据页热图明细跳转过来</span></div>
+      <span class="hint">牌谱里的 Hand # 编号</span></div>
   </details>
   <details open><summary>翻前</summary>
     <div class="frow">
-      <span class="lbl">Hero动作</span>
+      <span class="lbl">他的动作</span>
       <select id="paSel"><option value="any">不限</option><option value="F">弃牌</option><option value="C">跟注</option><option value="R">加注</option><option value="X">过牌/walk</option></select>
       <span class="lbl" style="min-width:auto">加注类型</span>
       <select id="rtSel"><option value="any">不限</option><option value="open">平开 (open)</option><option value="3b">3bet</option><option value="4b">4bet+</option></select>
       <span class="lbl" style="min-width:auto">被3bet</span>
       <select id="f3Sel"><option value="any">不限</option><option value="1">是</option><option value="0">否</option></select>
-      <span class="lbl" style="min-width:auto">Hero参与</span>
+      <span class="lbl" style="min-width:auto">他参与</span>
       <select id="joinSel"><option value="any">不限</option><option value="yes">参与（翻前未弃牌）</option><option value="no">未参与（翻前弃牌）</option></select>
     </div>
     <div class="frow">
-      <span class="lbl">HERO进攻方</span>
+      <span class="lbl">他是进攻方</span>
       <select id="aggSel"><option value="any">不限</option><option value="1">是</option><option value="0">否</option></select>
-      <span class="lbl" style="min-width:auto">HERO防守方</span>
+      <span class="lbl" style="min-width:auto">他是防守方</span>
       <select id="defSel"><option value="any">不限</option><option value="1">是</option><option value="0">否</option></select>
-      <span class="lbl" style="min-width:auto">Hero 4bet+</span>
+      <span class="lbl" style="min-width:auto">他 4bet+</span>
       <select id="h4bSel"><option value="any">不限</option><option value="1">是</option><option value="0">否</option></select>
-      <span class="hint">按翻前最后加注者判定：进攻方 = Hero 是翻前最后加注的人；防守方 = 最后加注的是对手且 Hero 翻前没弃牌。Hero 4bet+ = Hero 翻前做出过 4bet 或更高的加注（含开池被 3bet 后 4bet、冷 4bet、5bet+），与「加注类型 = 4bet+」只看首个动作不同</span>
+      <span class="hint">按翻前最后加注者判定：进攻方 = 他是翻前最后加注的人；防守方 = 最后加注的是别人且他翻前没弃牌。4bet+ = 他翻前做出过 4bet 或更高的加注（含开池被 3bet 后 4bet、冷 4bet、5bet+），与「加注类型 = 4bet+」只看首个动作不同</span>
     </div>
   </details>
   <details open><summary>手牌</summary>
@@ -55,10 +59,11 @@
         <option value="gap1">同花隔一张</option><option value="axs">Ax 同花</option>
       </select>
     </div>
+    <div class="frow"><span class="hint">对手牌谱只记录摊牌时亮出的牌，所以手牌类筛选只对「摊牌且亮牌」的手有效，其余手一律筛不到（列表里显示 —）</span></div>
   </details>
   <details open><summary>翻牌面</summary>
     <div class="frow"><span class="lbl">flop牌型</span><span id="g_fb"></span></div>
-    <div class="frow"><span class="hint">多选为「或」关系；只统计进了翻牌的手（run it twice 只看第一个牌面）。高张 = T~A，三小 = 三张都 ≤9；天顺面 = 三张连张（含 A23）；对子面不含三条面</span></div>
+    <div class="frow"><span class="hint">多选为「或」关系；只统计发出了翻牌的手。高张 = T~A，三小 = 三张都 ≤9；天顺面 = 三张连张（含 A23）；对子面不含三条面</span></div>
   </details>
   <details open><summary>过程</summary>
     <div class="frow">
@@ -68,21 +73,22 @@
       <select id="sdSel"><option value="any">不限</option><option value="1">是</option><option value="0">否</option></select>
       <span class="lbl" style="min-width:auto">摊牌结果</span>
       <select id="sdwSel"><option value="any">不限</option><option value="1">摊牌赢</option><option value="0">摊牌输</option><option value="2">摊牌平</option></select>
-      <span class="lbl" style="min-width:auto">Hero全下</span>
+      <span class="lbl" style="min-width:auto">他全下</span>
       <select id="aiSel"><option value="any">不限</option><option value="1">是</option><option value="0">否</option></select>
       <span class="lbl" style="min-width:auto">进翻人数</span>
       <select id="nfSel"><option value="any">不限</option><option value="2">单挑 (2)</option><option value="3">3人</option><option value="4">4人+</option></select>
+      <span class="hint">「到达街道 / 有摊牌」是整手牌局的口径（他翻前弃牌但牌局打到河牌，仍算河牌）；「摊牌结果」只看他自己有没有走到摊牌</span>
     </div>
     <div class="frow">
       <span class="lbl">翻后位置</span>
       <select id="ipSel"><option value="any">不限</option><option value="ip">IP（翻后后说话）</option><option value="oop">OOP（翻后先说话）</option></select>
-      <span class="hint">只算单挑池：进翻 2 人且 Hero 进了翻牌，多人池一律排除。按翻牌圈谁先说话判定</span>
+      <span class="hint">只算单挑池：进翻 2 人且他进了翻牌，多人池一律排除。按翻牌圈谁先说话判定</span>
     </div>
     <div class="frow">
-      <span class="lbl">hero动作</span>
+      <span class="lbl">他的动作</span>
       <select id="hsSel"><option value="any">任一街</option><option value="1">翻牌</option><option value="2">转牌</option><option value="3">河牌</option></select>
       <select id="haSel"><option value="any">不限</option><option value="ck">过牌</option><option value="ckr">过牌加注</option><option value="ckc">过牌跟注</option><option value="ckf">过牌弃牌</option><option value="b">下注</option><option value="r">加注</option><option value="c">跟注</option><option value="f">弃牌</option></select>
-      <span class="hint">只看翻后三街（翻前请用「翻前」分组的 Hero动作），自带街道、与「到达街道」互不影响：如 翻牌+跟注 → 翻牌上跟注的牌局（不管这手最后打到哪一街）。八个选项按该街最后一个动作归类，两两互斥（下注/加注/跟注/弃牌 = 该街没先过牌）</span>
+      <span class="hint">只看翻后三街（翻前请用「翻前」分组的动作），自带街道、与「到达街道」互不影响。八个选项按该街最后一个动作归类，两两互斥（下注/加注/跟注/弃牌 = 该街没先过牌）</span>
     </div>
   </details>
   <details open><summary>结果</summary>
@@ -96,13 +102,13 @@
       <span class="hint">如：输掉 ≥10bb 的大底池 → 只看输 + 净赢最大 -10</span>
     </div>
   </details>
-  <details><summary>对手摊牌牌</summary>
-    <div class="frow"><span class="lbl">对手牌</span>
-      <input type="text" id="oppTxt" placeholder="如 55、AhKh、Qs9s（匹配摊牌亮出的牌）">
-      <span class="hint">仅进入摊牌的手牌有对手牌</span>
+  <details><summary>别人摊牌的牌</summary>
+    <div class="frow"><span class="lbl">别人的牌</span>
+      <input type="text" id="oppTxt" placeholder="如 55、AhKh、Qs9s（匹配同桌其他人摊牌亮出的牌）">
+      <span class="hint">仅进入摊牌的手牌有这项</span>
     </div>
   </details>
-  <div class="frow"><button class="btn" id="resetBtn">重置全部筛选</button><span class="hint">点击表格行可展开该手完整过程</span></div>
+  <div class="frow"><button class="btn" id="resetBtn">重置全部筛选</button><span class="hint">点击表格行可展开该手完整过程（动作流里高亮的就是他）</span></div>
 </section>
 
 <div id="sumbar"></div>
@@ -124,5 +130,5 @@
   <span id="pgInfo"></span>
 </div>
 
-<script src="review.js"></script>
+<script src="opp-review.js"></script>
 </body></html>

@@ -44,7 +44,7 @@ export function handGroup(c1, c2) {
   return hi + lo + (c1[1] === c2[1] ? 's' : 'o');
 }
 
-function positionsFor(seatsSorted, btnSeat) {
+export function positionsFor(seatsSorted, btnSeat) {
   const n = seatsSorted.length;
   const i = seatsSorted.indexOf(btnSeat);
   const cyc = [];

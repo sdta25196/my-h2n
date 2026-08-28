@@ -12,27 +12,42 @@
   <a class="tab on" href="index.html">上传</a>
   <a class="tab" href="data.html">数据</a>
   <a class="tab" href="review.html">复盘</a>
+  <a class="tab" href="opponents.html">对手</a>
 </nav>
 
-<div id="drop" class="card">
-  <div class="big">把牌谱 <b>.txt</b> 拖到这里</div>
-  <div class="dim small" style="margin-bottom:12px">可多选；同一文件重复上传会跳过，重叠时段的牌谱按手牌编号自动去重</div>
-  <input type="file" id="picker" accept=".txt,text/plain" multiple hidden>
-  <button id="pick">选择文件</button>
+<div class="drops">
+  <div id="drop" class="drop card">
+    <div class="big">我的牌谱 <span class="tag hero">Hero 视角</span></div>
+    <div class="dim small" style="margin-bottom:12px">把 <b>.txt</b> 拖到这里，进「数据」「复盘」两页</div>
+    <input type="file" id="picker" accept=".txt,text/plain" multiple hidden>
+    <button id="pick">选择文件</button>
+  </div>
+  <div id="dropOpp" class="drop card">
+    <div class="big">对手牌谱 <span class="tag opp">整桌视角</span></div>
+    <div class="dim small" style="margin-bottom:12px">把 <b>.txt</b> 拖到这里，进「对手」页；可整个文件夹多选</div>
+    <input type="file" id="pickerOpp" accept=".txt,text/plain" multiple hidden>
+    <button id="pickOpp">选择文件</button>
+  </div>
+</div>
+<div class="dim small" style="margin-top:8px">
+  同一文件重复上传会跳过，重叠时段的牌谱按手牌编号自动去重；两种牌谱格式不同，拖错区域服务端会直接报错。
 </div>
 
 <div class="queue" id="queue"></div>
 
-<h2>库存概览</h2>
+<h2>库存概览 <span class="dim small">（我的牌谱）</span></h2>
 <div class="pills" id="totals"></div>
+
+<h2>库存概览 <span class="dim small">（对手牌谱）</span></h2>
+<div class="pills" id="oppTotals"></div>
 
 <h2>上传历史</h2>
 <div class="table-scroll">
   <table>
     <thead><tr>
-      <th>文件</th><th>上传时间</th><th>大小</th><th>解析手数</th><th>新增</th><th>重复</th><th>守恒校验</th>
+      <th>文件</th><th>类型</th><th>上传时间</th><th>大小</th><th>解析手数</th><th>新增</th><th>重复</th><th>守恒校验</th>
     </tr></thead>
-    <tbody id="files"><tr><td colspan="7" class="empty">加载中…</td></tr></tbody>
+    <tbody id="files"><tr><td colspan="8" class="empty">加载中…</td></tr></tbody>
   </table>
 </div>
 

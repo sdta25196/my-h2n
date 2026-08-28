@@ -14,22 +14,25 @@ const pfName = (r) =>
   r.pa === 'F' ? '弃牌' : r.pa === 'C' ? '跟注' : r.pa === 'X' ? '过牌' : ['开池', '3bet', '4bet'][r.rn] || '5bet+';
 
 // ---------- 上传队列 ----------
+// 两种牌谱共用一条串行队列（服务端是同一个 sqlite 连接，并发上传没好处）
+// job.kind 决定打哪条管线：'hero' -> /api/upload，'opp' -> /api/upload?kind=opp
 let busy = false;
 const jobs = [];
 
 function jobRow(job) {
   const cls = job.state === 'ok' ? 'ok' : job.state === 'dup' ? 'dup' : job.state === 'err' ? 'err' : '';
+  const tag = `<span class="tag ${job.kind === 'opp' ? 'opp' : 'hero'}">${job.kind === 'opp' ? '对手' : '我的'}</span>`;
   return `<div class="job ${cls}">
-    <div class="row1"><span class="name">${esc(job.file.name)}</span><span class="state">${esc(job.label)}</span></div>
+    <div class="row1"><span class="name">${tag} ${esc(job.file.name)}</span><span class="state">${esc(job.label)}</span></div>
     <div class="bar"><i style="width:${job.pct}%"></i></div>
     ${job.detail ? `<div class="detail">${job.detail}</div>` : ''}
   </div>`;
 }
 const renderQueue = () => ($('queue').innerHTML = jobs.map(jobRow).join(''));
 
-function enqueue(files) {
+function enqueue(files, kind) {
   for (const file of files) {
-    jobs.unshift({ file, state: 'wait', label: '排队中', pct: 0, detail: '' });
+    jobs.unshift({ file, kind, state: 'wait', label: '排队中', pct: 0, detail: '' });
   }
   renderQueue();
   pump();
@@ -52,7 +55,7 @@ async function pump() {
 function upload(job) {
   return new Promise((resolve) => {
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', '/api/upload');
+    xhr.open('POST', job.kind === 'opp' ? '/api/upload?kind=opp' : '/api/upload');
     xhr.setRequestHeader('content-type', 'text/plain');
     xhr.setRequestHeader('x-filename', encodeURIComponent(job.file.name));
     xhr.upload.onprogress = (e) => {
@@ -90,6 +93,7 @@ function upload(job) {
         job.label = `新增 ${s.inserted} 手`;
         job.detail =
           `解析 ${s.total} 手 · 新增 ${s.inserted} · 重复跳过 ${s.duplicated} · ` +
+          (s.players != null ? `玩家记录 ${s.players} 条 · ` : '') +
           `筹码守恒校验 ${s.checkPassed}/${s.checkTotal} (${s.checkRate.toFixed(1)}%) · 耗时 ${(s.elapsedMs / 1000).toFixed(1)}s`;
       }
       renderQueue();
@@ -122,18 +126,29 @@ async function refresh() {
   const net = Number(t.net_cents) / 100;
   const pill = (label, value) => `<div class="pill"><div class="pill-v">${value}</div><div class="pill-l">${label}</div></div>`;
   $('totals').innerHTML =
-    pill('总手数', hands.toLocaleString()) +
+    pill('总手数', hands ? hands.toLocaleString() : '—') +
     pill('净盈亏 ₮', hands ? money(net) : '—') +
     pill('级别数', t.stakes_count ?? 0) +
     pill('最早一手', t.first_ts ? t.first_ts.slice(0, 16) : '—') +
     pill('最新一手', t.last_ts ? t.last_ts.slice(0, 16) : '—') +
-    pill('上传文件数', filesRes.files.length);
+    pill('上传文件数', filesRes.files.filter((f) => f.kind !== 'opp').length);
+
+  // 对手库存概览
+  const o = filesRes.opp || {};
+  $('oppTotals').innerHTML =
+    pill('对手玩家数', o.players ?? 0) +
+    pill('总手数', o.hands ? Number(o.hands).toLocaleString() : '—') +
+    pill('级别数', o.stakes_count ?? 0) +
+    pill('最早一手', o.first_ts ? o.first_ts.slice(0, 16) : '—') +
+    pill('最新一手', o.last_ts ? o.last_ts.slice(0, 16) : '—') +
+    pill('上传文件数', filesRes.files.filter((f) => f.kind === 'opp').length);
 
   $('files').innerHTML =
     filesRes.files
       .map(
         (f) => `<tr>
           <td>${esc(f.filename)}</td>
+          <td><span class="tag ${f.kind === 'opp' ? 'opp' : 'hero'}">${f.kind === 'opp' ? '对手' : '我的'}</span></td>
           <td>${esc(String(f.uploaded_at).slice(0, 19).replace('T', ' '))}</td>
           <td>${mb(Number(f.size))}</td>
           <td>${Number(f.hands_total).toLocaleString()}</td>
@@ -142,7 +157,7 @@ async function refresh() {
           <td>${f.check_total ? ((100 * Number(f.check_passed)) / Number(f.check_total)).toFixed(1) + '%' : '—'}</td>
         </tr>`
       )
-      .join('') || '<tr><td colspan="7" class="empty">还没有上传过文件</td></tr>';
+      .join('') || '<tr><td colspan="8" class="empty">还没有上传过文件</td></tr>';
 
   $('recent').innerHTML =
     handsRes.rows
@@ -162,28 +177,34 @@ async function refresh() {
 }
 
 // ---------- 交互 ----------
-const drop = $('drop');
-$('pick').onclick = () => $('picker').click();
-$('picker').onchange = (e) => {
-  enqueue(e.target.files);
-  e.target.value = '';
-};
-for (const ev of ['dragenter', 'dragover']) {
-  drop.addEventListener(ev, (e) => {
-    e.preventDefault();
-    drop.classList.add('hot');
+// 两个拖拽区行为一致，只差 kind；.hot 高亮与 dragleave 的子元素冒泡处理沿用原来的写法
+function wireDrop(dropId, pickId, pickerId, kind) {
+  const drop = $(dropId);
+  $(pickId).onclick = () => $(pickerId).click();
+  $(pickerId).onchange = (e) => {
+    enqueue(e.target.files, kind);
+    e.target.value = '';
+  };
+  for (const ev of ['dragenter', 'dragover']) {
+    drop.addEventListener(ev, (e) => {
+      e.preventDefault();
+      drop.classList.add('hot');
+    });
+  }
+  for (const ev of ['dragleave', 'drop']) {
+    drop.addEventListener(ev, (e) => {
+      e.preventDefault();
+      if (ev === 'dragleave' && drop.contains(e.relatedTarget)) return;
+      drop.classList.remove('hot');
+    });
+  }
+  drop.addEventListener('drop', (e) => {
+    const files = [...(e.dataTransfer?.files || [])].filter((f) => /\.txt$/i.test(f.name));
+    if (files.length) enqueue(files, kind);
   });
 }
-for (const ev of ['dragleave', 'drop']) {
-  drop.addEventListener(ev, (e) => {
-    e.preventDefault();
-    if (ev === 'dragleave' && drop.contains(e.relatedTarget)) return;
-    drop.classList.remove('hot');
-  });
-}
-drop.addEventListener('drop', (e) => {
-  const files = [...(e.dataTransfer?.files || [])].filter((f) => /\.txt$/i.test(f.name));
-  if (files.length) enqueue(files);
-});
+
+wireDrop('drop', 'pick', 'picker', 'hero');
+wireDrop('dropOpp', 'pickOpp', 'pickerOpp', 'opp');
 
 refresh();
